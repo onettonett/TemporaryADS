@@ -480,7 +480,8 @@ def compute_expenditure_shares(dvhh: pd.DataFrame) -> pd.DataFrame:
         share_sum = df[share_cols].sum(axis=1)
 
         # Warn when the shares deviate from 1.0 by more than 0.01.
-        if share_sum.notna().any():
+        valid = share_sum.notna()
+        if valid.any():
             deviation = (share_sum[valid] - 1.0).abs()
             n_bad = (deviation > 0.01).sum()
             if n_bad > 0:
@@ -489,9 +490,10 @@ def compute_expenditure_shares(dvhh: pd.DataFrame) -> pd.DataFrame:
     return df
 
 def winsorise_shares(df: pd.DataFrame) -> pd.DataFrame:
+    """Winsorise expenditure shares at 1st and 99th percentiles by year."""
     res = df.copy()
     # These are the expenditure shares that we just computed with compute_expenditure_shares()
-    expenditure_share_cols = [c for c in out.columns if c.startswith("share_")]
+    share_cols = [c for c in res.columns if c.startswith("share_")]
 
     # Helper function only winsorises if enough values for the year to be confident about the extremities.
     def winsorise_helper(share_values):
@@ -500,8 +502,11 @@ def winsorise_shares(df: pd.DataFrame) -> pd.DataFrame:
         lo = share_values.quantile(WINSOR_LOWER)
         hi = share_values.quantile(WINSOR_UPPER)
         return share_values.clip(lo, hi)
-    
-    res[share_cols] = out.groupby("year")[share_cols].transform(winsor_logic)
+
+    # Apply winsorisation to each share column by year
+    for col in share_cols:
+        res[col] = res.groupby("year")[col].transform(winsorise_helper)
+
     return res
         
 

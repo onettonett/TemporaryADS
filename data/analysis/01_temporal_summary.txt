@@ -1,0 +1,21 @@
+
+TEMPORAL EXPLORATION SUMMARY
+==================================================
+
+Mean Inflation by Era:
+  • 2015-2019 (Normal): nan%
+  • 2020 (COVID): 0.84%
+  • 2021-2023 (Crisis): nan%
+
+Peak Inflation:
+  • Year: 2022 at 8.91%
+  • Lowest: 2015 at 0.47%
+
+Volatility:
+  • Pre-2022: nan
+  • 2022-2023: nan
+  • Volatility increased: False
+
+Months >8% YoY Inflation:
+  • Count: 10
+  • Period: 89 to 98

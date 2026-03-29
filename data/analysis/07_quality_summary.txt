@@ -1,0 +1,20 @@
+
+DATA QUALITY SUMMARY
+==================================================
+
+SAMPLE SIZES:
+  • Total LCF households: 45,965
+  • Total observations: 413,685
+  • Minimum cell size: 796
+  • Small cells (n<50): 0
+  • Status: ✓ ADEQUATE
+
+OUTLIERS:
+  • Detected: 35 (11.1%)
+  • Threshold: 7.89%
+  • Status: ✗ HIGH
+
+COVERAGE:
+  • Years: 2015-2023 (9 years)
+  • Archetype dimensions: 9
+  • Archetype groups: 31

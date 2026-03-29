@@ -24,6 +24,7 @@ STEPS = {
     "lcf": ("wrangle_lcf", "LCF (Living Costs and Food Survey)"),
     "mm23": ("wrangle_mm23", "MM23 (CPIH Price Indices)"),
     "hci": ("wrangle_hci", "HCI (Household Costs Indices)"),
+    "inflation": ("compute_group_inflation", "Group-Specific Inflation Rates"),
 }
 
 

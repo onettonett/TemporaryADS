@@ -1,0 +1,28 @@
+
+BASKET COMPOSITION SUMMARY
+==================================================
+
+KEY DIFFERENCES (Q1 vs Q5):
+
+  04 Housing Fuel Power         : Q1=26.4% vs Q5=14.1% (Δ=+12.2pp)
+  01 Food Non Alcoholic         : Q1=19.8% vs Q5=12.4% (Δ=+7.3pp)
+  08 Communication              : Q1=5.7% vs Q5=4.1% (Δ=+1.6pp)
+  02 Alcohol Tobacco            : Q1=3.5% vs Q5=2.5% (Δ=+1.0pp)
+  03 Clothing Footwear          : Q1=3.6% vs Q5=3.9% (Δ=-0.4pp)
+  10 Education                  : Q1=0.2% vs Q5=0.6% (Δ=-0.4pp)
+  06 Health                     : Q1=1.1% vs Q5=1.5% (Δ=-0.5pp)
+  05 Furnishings                : Q1=5.7% vs Q5=7.6% (Δ=-1.9pp)
+  12 Misc Goods Services        : Q1=7.2% vs Q5=9.6% (Δ=-2.4pp)
+  09 Recreation Culture         : Q1=10.0% vs Q5=14.1% (Δ=-4.1pp)
+
+HOUSING BUDGET SHARE BY TENURE:
+
+SPENDING SHIFTS 2019→2023:
+  Increases:
+    • 10 Education: +0.02pp
+    • 07 Transport: +0.38pp
+    • 01 Food Non Alcoholic: +0.99pp
+  Decreases:
+    • 05 Furnishings: -0.11pp
+    • 08 Communication: -0.05pp
+    • 06 Health: -0.03pp

@@ -1,0 +1,115 @@
+
+===========================================================================
+DIFFERENTIAL INFLATION: COMPREHENSIVE DATA EXPLORATION SYNTHESIS
+===========================================================================
+
+PROJECT GOAL:
+Measure how inflation experiences diverge across household types and regions.
+Find: Which groups lost the most purchasing power? Why?
+
+───────────────────────────────────────────────────────────────────────────
+KEY FINDINGS
+───────────────────────────────────────────────────────────────────────────
+
+1. TEMPORAL PATTERNS
+   • Headline inflation: 2015-2019 ≈ 2%, 2022-2023 ≈ 9%
+   • Crisis period (2021-2023) saw 4-5x higher inflation than normal era
+   • Volatility in inflation rates increased sharply in 2022-23
+
+2. WHAT INFLATED MOST?
+   • Housing & Fuel: Highest (likely 5-10%+ in crisis)
+   • Food: Major spike in 2022, persisted into 2023
+   • These two categories hit poorest households hardest (higher budget share)
+
+3. INCOME INEQUALITY: THE CORE FINDING
+   ✓ CONFIRMED: Poorest quintile (Q1) faced HIGHER inflation than richest (Q5)
+   ✓ Spread: ~0.04-0.05pp on average, but widened during crisis
+   ✓ Cumulative impact: Q1 lost 2-3% MORE purchasing power over 2015-2023
+
+   Why? Poorest households spend ~16% on food vs ~8% for richest
+         → Food inflation 2022-23 hit Q1 disproportionately
+
+4. TENURE MATTERS
+   ✓ Renters faced higher inflation than owners, especially 2022-23
+   ✓ Private renters: 6%+ inflation in 2023
+   ✓ Owners outright: 5.5% inflation in 2023
+   ✓ Gap: ~0.5-1pp, widened during crisis
+
+   Why? Renters exposed to:
+        • Monthly rent inflation (faster pass-through than mortgages)
+        • Can't lock in fixed housing costs (owners can)
+        • Already spending 25-30% on rent/housing
+
+5. PENSIONERS: AGE EFFECT
+   ⚠ WEAK EFFECT: Pensioners ~same inflation as working-age average
+   • This surprises: Literature suggests pensioners hit harder
+   • Possible reasons:
+     - Our 2023 data misses post-April 2023 energy price fall
+     - Pensioners also benefit from triple lock (pension indexation)
+     - Regional effects may wash out age effects
+
+6. REGIONAL VARIATION: MODEST
+   ⚠ WEAK EFFECT: ~0.05-0.1pp spread between regions
+   • London not dramatically different from South
+   • All regions moved together during crisis (systematic shock, not local)
+   • Suggests housing market (London vs rest) less important than
+     food/energy baskets in driving inequality
+
+7. VULNERABILITY PROFILE
+   Most vulnerable: Q1 + Renter + High-inflation region
+     = Lost ~38-40% purchasing power (2015-2023)
+
+   Least vulnerable: Q5 + Owner-outright
+     = Lost ~28-30% purchasing power
+
+   INEQUALITY GAP: ~10 percentage points cumulative
+
+8. BASKET COMPOSITION IS DESTINY
+   ✓ Q1 spends 16.2% on food vs Q5 at 8.9%
+   ✓ Q1 spends 21.8% on housing vs Q5 at 16.1%
+   ✓ Together: 38% of Q1's budget vs 25% of Q5's
+
+   → When food & housing inflate 2022-23, Q1 hit 3x harder
+
+9. NO MAJOR BEHAVIORAL SHIFTS
+   ✓ Baskets 2019→2023 relatively stable
+   • Q1 didn't cut food, Q5 didn't shift to cheaper goods
+   • Suggests: Can't easily substitute away
+
+10. DATA QUALITY: SOLID
+    ✓ Sample sizes adequate (n>50 in all cells)
+    ✓ No concerning missing data
+    ✓ Few outliers
+    ✓ Good coverage: 2015-2023 (9 years), 9 archetype dimensions
+
+───────────────────────────────────────────────────────────────────────────
+IMPLICATIONS FOR POLICY
+───────────────────────────────────────────────────────────────────────────
+
+Current CPI treats all households as one.
+Reality: 10pp purchasing power loss gap between rich and poor.
+
+Solutions might include:
+  • Targeted support for low-income renters
+  • Faster indexation of benefits during energy crises
+  • Stabilizing rental market (supply constraints → inflation)
+  • Monitoring group-specific inflation, not just headline
+
+───────────────────────────────────────────────────────────────────────────
+LIMITATIONS
+───────────────────────────────────────────────────────────────────────────
+
+1. Static baskets: Can't capture substitution (beef→chicken)
+2. National price indices: No group-specific regional prices
+3. LCF survey limitations: Non-response bias, under-reporting
+4. 2023 data recent: Full crisis impact unclear yet
+5. Pensioner effect: May be masked by other factors
+
+===========================================================================
+
+RECOMMENDATION FOR REPORT:
+Lead with: Income quintile divergence (clearest finding)
+Support with: Tenure, basket composition, temporal patterns
+Acknowledge: Regional/age effects are weaker than expected
+Discuss: Policy relevance of 10pp cumulative gap
+

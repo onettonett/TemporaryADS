@@ -1,0 +1,26 @@
+
+INEQUALITY METRICS SUMMARY
+==================================================
+
+GINI COEFFICIENT (0=equal, 1=unequal):
+  • 2015-2019: nan
+  • 2020: -0.0219
+  • 2021-2023: nan
+  • Trend: NARROWED
+
+SPREAD METRICS (P90-P10):
+  • Range: 0.034pp to 0.505pp
+  • Pre-2022: nanpp
+  • 2022-2023: nanpp
+
+INEQUALITY BY DIMENSION:
+
+  hh_composition           : 0.804pp
+  hrp_age_band             : 0.090pp
+  tenure_type              : 0.067pp
+  employment_status        : 0.063pp
+  region_broad             : 0.057pp
+  is_pensioner             : 0.047pp
+  income_quintile          : 0.044pp
+  is_carer                 : 0.022pp
+  is_disability            : 0.020pp

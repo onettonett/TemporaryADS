@@ -100,7 +100,7 @@ def _safe_cols(df: pd.DataFrame, wanted: list[str]) -> list[str]:
 
 def load_stata(path: pathlib.Path) -> pd.DataFrame:
     """Read a Stata .dta file and lowercase all column names."""
-    df = pd.read_stata(path, convert_categoricals=False)
+    df = pd.read_stata(path, convert_categoricals=False, convert_dates=False)
     df.columns = df.columns.str.lower()
     return df
 
