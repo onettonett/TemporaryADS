@@ -46,7 +46,7 @@ PROCESSED = ROOT / "data" / "processed"
 INTERIM.mkdir(parents=True, exist_ok=True)
 PROCESSED.mkdir(parents=True, exist_ok=True)
 
-# ── File-path mapping ───────────────────────────────────────────────────────
+# File-path mapping
 # dvhh = derived household-level file (expenditure + demographics)
 # dvper = derived person-level file (individual demographics)
 # Use the main annual files, NOT quarterly or urbanrural variants.
@@ -79,7 +79,7 @@ LCF_DVPER = {
     2023: RAW / "LCF_2023" / "stata" / "stata13_se" / "dvper_ukanon_202324_2023.dta",
 }
 
-# ── COICOP division-level total expenditure columns (weekly, GBP) ──────────
+# COICOP division-level total expenditure columns (weekly, GBP)
 # p601t = COICOP 01 (Food & non-alcoholic beverages)
 # p602t = COICOP 02 (Alcoholic beverages & tobacco)
 # ...
@@ -126,7 +126,7 @@ CK_COLS = [
     "ck5215t", "ck5216t", "ck5221t", "ck5222t", "ck5223t", "ck5316t",
 ]
 
-# ── Household demographic/classification variables (dvhh) ─────────────────
+# Household demographic/classification variables (dvhh)
 
 DVHH_SOURCE_COLS = [
     "case",         # household case ID
@@ -205,7 +205,7 @@ DVHH_READABLE_NAMES = {
     "b020": "mortgage_payments_weekly",
 }
 
-# ── Person-level variables (dvper) ─────────────────────────────────────────
+# Person-level variables (dvper)
 
 DVPER_SOURCE_COLS = [
     "case",         # Household ID (used to link individual's records to household records).
@@ -255,7 +255,7 @@ DVPER_READABLE_NAMES = {
     "b343": "carers_allowance_weekly",
 }
 
-# ── Region labels ──────────────────────────────────────────────────────────
+# Region labels
 
 REGION_LABELS = {
     1: "North East",
@@ -288,19 +288,17 @@ REGION_BROAD = {
     12: "Northern Ireland",                 # Northern Ireland
 }
 
-# ── Winsorisation bounds ───────────────────────────────────────────────────
+# Winsorisation bounds
 
 WINSOR_LOWER = 0.01   # 1st percentile
 WINSOR_UPPER = 0.99   # 99th percentile
 
-# ── Minimum cell size for reliable group estimates ─────────────────────────
+# Minimum cell size for reliable group estimates
 
 MIN_CELL_SIZE = 100
 
 
-# ═══════════════════════════════════════════════════════════════════════════
 # Helper functions
-# ═══════════════════════════════════════════════════════════════════════════
 
 def _safe_cols(df: pd.DataFrame, wanted: list[str]) -> list[str]:
     """Return the subset of *wanted* columns that actually exist in *df*."""
@@ -315,9 +313,7 @@ def load_stata(path: pathlib.Path) -> pd.DataFrame:
     return df
 
 
-# ═══════════════════════════════════════════════════════════════════════════
 # Step 1: Extraction
-# ═══════════════════════════════════════════════════════════════════════════
 
 def extract_dvhh(year: int) -> pd.DataFrame:
     """Load LCF dvhh file for *year* and select target variables."""
@@ -400,7 +396,33 @@ def clean_expenditure(dvhh: pd.DataFrame) -> pd.DataFrame:
             print(f"Cleaning: {n_neg} negative values in {col} (COICOP column) -> NaN")
             df.loc[df[col] < 0, col] = np.nan
 
-    # --- Denominator consistency check ---
+    # Plausibility filter on total expenditure
+    # LCF records weekly expenditure. Values outside plausible bounds are
+    # almost certainly data errors (incomplete diaries, annual figures entered
+    # as weekly, transcription errors) rather than genuine extreme spenders.
+    # We remove these BEFORE computing shares so the shares themselves are
+    # uncontaminated. We do NOT winsorise shares — genuine extreme spenders
+    # (e.g. fuel-poor pensioners at 45% energy share) are real households and
+    # suppressing them would directly hide the inequality we are measuring.
+    PLAUSIBILITY_LOWER = 30.0    # below £30/week is almost certainly an incomplete diary
+    PLAUSIBILITY_UPPER = 3000.0  # above £3,000/week is almost certainly a data entry error
+
+    if "hh_total_coicop_expenditure" in df.columns:
+        valid_mask = df["hh_total_coicop_expenditure"].notna()
+        n_too_low = (df.loc[valid_mask, "hh_total_coicop_expenditure"] < PLAUSIBILITY_LOWER).sum()
+        n_too_high = (df.loc[valid_mask, "hh_total_coicop_expenditure"] > PLAUSIBILITY_UPPER).sum()
+        if n_too_low > 0:
+            print(f"    Plausibility filter: {n_too_low} households with total expenditure "
+                  f"< £{PLAUSIBILITY_LOWER:.0f}/week removed (likely incomplete diary)")
+            df.loc[df["hh_total_coicop_expenditure"] < PLAUSIBILITY_LOWER,
+                   "hh_total_coicop_expenditure"] = np.nan
+        if n_too_high > 0:
+            print(f"    Plausibility filter: {n_too_high} households with total expenditure "
+                  f"> £{PLAUSIBILITY_UPPER:.0f}/week removed (likely data entry error)")
+            df.loc[df["hh_total_coicop_expenditure"] > PLAUSIBILITY_UPPER,
+                   "hh_total_coicop_expenditure"] = np.nan
+
+    # Denominator consistency check
     # Compare p630tp to the sum of divisions. If they diverge by > 1%
     # it means p630tp includes/excludes items the divisions don't.
     # Remember p630tp is the total weekly household expenditure.
@@ -451,9 +473,7 @@ def clean_expenditure(dvhh: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-# ═══════════════════════════════════════════════════════════════════════════
 # Step 3: Expenditure shares + Winsorisation
-# ═══════════════════════════════════════════════════════════════════════════
 
 def compute_expenditure_shares(dvhh: pd.DataFrame) -> pd.DataFrame:
     """
@@ -472,6 +492,20 @@ def compute_expenditure_shares(dvhh: pd.DataFrame) -> pd.DataFrame:
     for col, label in COICOP_DIVISION_LABELS.items():
         if col in df.columns:
             df[f"share_{label}"] = df[col] / df["_total_expenditure"]
+
+    # Split COICOP 04 into rent vs energy+other
+    # b010 (rent_gross_weekly) is actual rent paid by tenants.
+    # For owners this is zero, so their share_04_actual_rent = 0 correctly.
+    # The remainder (p604t - b010) captures energy, maintenance, water.
+    if "rent_gross_weekly" in df.columns and "p604t" in df.columns:
+        rent_col = df["rent_gross_weekly"].fillna(0).clip(lower=0)
+        p604 = df["p604t"].fillna(0).clip(lower=0)
+        # Ensure rent component cannot exceed total COICOP 04
+        rent_capped = rent_col.clip(upper=p604)
+        energy_other = (p604 - rent_capped).clip(lower=0)
+        total = df["_total_expenditure"]
+        df["share_04_actual_rent"]     = rent_capped   / total
+        df["share_04_energy_other"]    = energy_other  / total
 
     # Ensure the shares sum to (very near) 1 for each household.
     share_cols = [c for c in df.columns if c.startswith("share_")]
@@ -686,14 +720,12 @@ def add_lcf_archetypes(
     """
     df = dvhh.copy()
 
-    # ── Aggregate person-level data to household ──
+    # Aggregate person-level data to household
     print("    Aggregating person-level data (disability, employment)...")
     hh_person = _aggregate_person_to_household(dvper)
     df = df.merge(hh_person, on=["household_id", "year"], how="left")
 
-    # ═══════════════════════════════════════════════════════════════════
     # Group 1: Tenure type (from a121)
-    # ═══════════════════════════════════════════════════════════════════
     # a121 codes: 1=council rent, 2=HA rent, 3=private rent unfurnished,
     # 4=private rent furnished, 5=owned outright, 6=buying with loan help,
     # 7=owned with mortgage, 8=rent free
@@ -712,9 +744,7 @@ def add_lcf_archetypes(
     else:
         df["tenure_type"] = "unknown"
 
-    # ═══════════════════════════════════════════════════════════════════
     # Group 2: Pensioner household (improved multi-signal definition)
-    # ═══════════════════════════════════════════════════════════════════
     # A household is classified as pensioner if ANY of:
     # - HRP age >= 66 (state pension age)
     # - Any person aged 65+ in HH (a046 + a047 > 0)
@@ -736,9 +766,7 @@ def add_lcf_archetypes(
 
     df["is_pensioner"] = cond_age | cond_over65 | cond_econ | cond_emp
 
-    # ═══════════════════════════════════════════════════════════════════
     # Group 3: Income quintile (weighted, equivalised)
-    # ═══════════════════════════════════════════════════════════════════
     # Uses equivalised income (modified OECD scale) from eqincdmp, which
     # adjusts for household size and composition.  Falls back to gross
     # income (p389p) if equivalised is unavailable.
@@ -750,6 +778,8 @@ def add_lcf_archetypes(
     if income_col in df.columns and weight_col in df.columns:
         print(f"    Computing weighted income quintiles using "
               f"{income_col} + {weight_col}...")
+        # Exclude households with zero/negative income so they don't pollute Q1
+        df.loc[df[income_col] <= 0, income_col] = np.nan
         df["income_quintile"] = _weighted_quintiles(
             df, value_col=income_col, weight_col=weight_col
         )
@@ -774,9 +804,7 @@ def add_lcf_archetypes(
     else:
         df["income_quintile"] = np.nan
 
-    # ═══════════════════════════════════════════════════════════════════
     # Group 4: Children and household composition
-    # ═══════════════════════════════════════════════════════════════════
     # LCF age-banded person counts:
     #   a040 = children under 2
     #   a041 = children aged 2 to under 5
@@ -812,21 +840,15 @@ def add_lcf_archetypes(
     choices = ["single_parent", "couple_with_children", "no_children"]
     df["hh_composition"] = np.select(conditions, choices, default="unknown")
 
-    # ═══════════════════════════════════════════════════════════════════
     # Group 5: Disability (already merged from person aggregation)
-    # ═══════════════════════════════════════════════════════════════════
     # is_disability is already in df from _aggregate_person_to_household
     # Ensure it's boolean
     df["is_disability"] = df["is_disability"].fillna(False).astype(bool)
 
-    # ═══════════════════════════════════════════════════════════════════
     # Group 6: Carer household (already merged)
-    # ═══════════════════════════════════════════════════════════════════
     df["is_carer"] = df["is_carer"].fillna(False).astype(bool)
 
-    # ═══════════════════════════════════════════════════════════════════
     # Group 7: Employment composition
-    # ═══════════════════════════════════════════════════════════════════
     # Based on aggregated person-level economic position (a206)
     if "n_working" in df.columns:
         n_work = df["n_working"].fillna(0)
@@ -847,9 +869,7 @@ def add_lcf_archetypes(
     else:
         df["employment_status"] = "unknown"
 
-    # ═══════════════════════════════════════════════════════════════════
     # Group 8: Region
-    # ═══════════════════════════════════════════════════════════════════
     if "region_code" in df.columns:
         df["region"] = df["region_code"].map(REGION_LABELS).fillna("unknown")
         df["region_broad"] = df["region_code"].map(REGION_BROAD).fillna("unknown")
@@ -857,9 +877,7 @@ def add_lcf_archetypes(
         df["region"] = "unknown"
         df["region_broad"] = "unknown"
 
-    # ═══════════════════════════════════════════════════════════════════
     # Group 9: HRP age band
-    # ═══════════════════════════════════════════════════════════════════
     if "hrp_age" in df.columns:
         bins = [0, 30, 50, 65, 75, 200]
         labels = ["under_30", "30_to_49", "50_to_64", "65_to_74", "75_plus"]
@@ -873,9 +891,7 @@ def add_lcf_archetypes(
     else:
         df["hrp_age_band"] = np.nan
 
-    # ═══════════════════════════════════════════════════════════════════
     # Group 10: Household size
-    # ═══════════════════════════════════════════════════════════════════
     # a049 = household size (total persons); NOT a040 which is children < 2
     if "household_size" in df.columns:
         df["hh_size"] = df["household_size"]
@@ -884,17 +900,13 @@ def add_lcf_archetypes(
     else:
         df["hh_size"] = np.nan
 
-    # ═══════════════════════════════════════════════════════════════════
     # COVID period flag (expanded: both 2019/20 and 2020/21)
-    # ═══════════════════════════════════════════════════════════════════
     df["is_covid_year"] = df["year"].isin([2019, 2020])
 
     return df
 
 
-# ═══════════════════════════════════════════════════════════════════════════
 # Step 5: Quality assurance
-# ═══════════════════════════════════════════════════════════════════════════
 
 def qa_cell_sizes(df: pd.DataFrame) -> None:
     """
@@ -961,9 +973,7 @@ def qa_share_diagnostics(df: pd.DataFrame) -> None:
               f"min={valid_sums.min():.4f}, max={valid_sums.max():.4f}")
 
 
-# ═══════════════════════════════════════════════════════════════════════════
 # Main pipeline
-# ═══════════════════════════════════════════════════════════════════════════
 
 def main() -> None:
     print("=" * 60)
@@ -972,7 +982,7 @@ def main() -> None:
 
     years = sorted(LCF_DVHH.keys())
 
-    # ── 1. Extract dvhh data ────────────────────────────────────────────
+    # 1. Extract dvhh data
     print("\n[1/6] Extracting household expenditure data (dvhh)...")
     dvhh_frames = []
     for yr in years:
@@ -983,7 +993,7 @@ def main() -> None:
     dvhh = pd.concat(dvhh_frames, ignore_index=True)
     print(f"  TOTAL: {len(dvhh):,} household-year observations")
 
-    # ── 2. Extract dvper data ───────────────────────────────────────────
+    # 2. Extract dvper data
     print("\n[2/6] Extracting person-level data (dvper)...")
     dvper_frames = []
     for yr in years:
@@ -993,21 +1003,20 @@ def main() -> None:
     dvper = pd.concat(dvper_frames, ignore_index=True)
     print(f"  TOTAL: {len(dvper):,} person-year observations")
 
-    # ── 3. Save interim files ───────────────────────────────────────────
+    # 3. Save interim files
     print("\n[3/6] Saving interim files...")
     dvhh.to_parquet(INTERIM / "lcf_household.parquet", index=False)
     dvper.to_parquet(INTERIM / "lcf_person.parquet", index=False)
     print(f"  Saved: {INTERIM / 'lcf_household.parquet'}")
     print(f"  Saved: {INTERIM / 'lcf_person.parquet'}")
 
-    # ── 4. Clean expenditure data ───────────────────────────────────────
+    # 4. Clean expenditure data
     print("\n[4/6] Cleaning expenditure data...")
     cleaned = clean_expenditure(dvhh)
 
-    # ── 5. Compute shares, Winsorise, add archetypes ────────────────────
+    # 5. Compute shares, add archetypes
     print("\n[5/6] Computing expenditure shares & adding archetypes...")
     analysis = compute_expenditure_shares(cleaned)
-    analysis = winsorise_shares(analysis)
     analysis = add_lcf_archetypes(analysis, dvper)
 
     # Drop internal working columns
@@ -1019,12 +1028,12 @@ def main() -> None:
     )
     print(f"  Saved: {PROCESSED / 'lcf_expenditure_shares.parquet'}")
 
-    # ── 6. Quality assurance ────────────────────────────────────────────
+    # 6. Quality assurance
     print("\n[6/6] Quality assurance...")
     qa_share_diagnostics(analysis)
     qa_cell_sizes(analysis)
 
-    # ── Summary ─────────────────────────────────────────────────────────
+    # Summary
     print("\n" + "=" * 60)
     print("SUMMARY")
     print("=" * 60)
@@ -1047,7 +1056,7 @@ def main() -> None:
             print(f"    {col.replace('share_', '')}: "
                   f"{analysis[col].mean():.4f}")
 
-    # ── Archetype distributions ──
+    # Archetype distributions
     print(f"\n  Tenure distribution:")
     if "tenure_type" in analysis.columns:
         for t, n in analysis["tenure_type"].value_counts().items():

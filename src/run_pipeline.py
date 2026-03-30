@@ -1,14 +1,14 @@
 """
 run_pipeline.py
 ===============
-Master pipeline runner: executes all four data wrangling scripts in sequence.
+Pipeline runner: executes LCF + CPIH/HCI steps in sequence.
 
 Usage:
     python src/run_pipeline.py           # run all steps
-    python src/run_pipeline.py frs       # run FRS only
     python src/run_pipeline.py lcf       # run LCF only
     python src/run_pipeline.py mm23      # run MM23/CPIH only
     python src/run_pipeline.py hci       # run HCI only
+    python src/run_pipeline.py inflation # compute group inflation
 
 All outputs go to data/interim/ (intermediate) and data/processed/ (analysis-ready).
 Raw data in data/raw/ is never modified.
@@ -20,7 +20,6 @@ import importlib
 
 
 STEPS = {
-    "frs": ("wrangle_frs", "FRS (Family Resources Survey)"),
     "lcf": ("wrangle_lcf", "LCF (Living Costs and Food Survey)"),
     "mm23": ("wrangle_mm23", "MM23 (CPIH Price Indices)"),
     "hci": ("wrangle_hci", "HCI (Household Costs Indices)"),

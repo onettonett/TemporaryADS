@@ -49,7 +49,7 @@ if HCI_FILE:
 else:
     HCI_PATH = RAW / "householdcostsindicesforukhouseholdgroupsocttodec25.xlsx"
 
-# ── Sheet configurations ────────────────────────────────────────────────────
+# Sheet configurations
 # Each table has:
 # - header_rows: number of metadata rows before column headers
 # - header_row_idx: which row contains column names (0-indexed)
@@ -216,7 +216,7 @@ def build_validation_panel(tables: dict[str, pd.DataFrame]) -> pd.DataFrame:
     return combined.sort_values(["grouping", "group", "date"]).reset_index(drop=True)
 
 
-# ── Main pipeline ───────────────────────────────────────────────────────────
+# Main pipeline
 
 def main() -> None:
     print("=" * 60)
@@ -227,7 +227,7 @@ def main() -> None:
 
     tables = {}
 
-    # ── 1. Load each table ──────────────────────────────────────────────
+    # 1. Load each table
     print("\n[1/3] Loading HCI tables...")
     for sheet_name, config in TABLE_CONFIG.items():
         print(f"  {sheet_name}: {config['description']}...")
@@ -244,7 +244,7 @@ def main() -> None:
             print(f"    ERROR: {e}")
             tables[sheet_name] = pd.DataFrame()
 
-    # ── 2. Save interim files ───────────────────────────────────────────
+    # 2. Save interim files
     print("\n[2/3] Saving interim files...")
     file_map = {
         "Table 1": "hci_summary_pctchange.parquet",
@@ -258,7 +258,7 @@ def main() -> None:
             tables[sheet_name].to_parquet(INTERIM / filename, index=False)
             print(f"  Saved: {filename}")
 
-    # ── 3. Build validation panel ───────────────────────────────────────
+    # 3. Build validation panel
     print("\n[3/3] Building combined validation panel...")
     validation = build_validation_panel(tables)
     if not validation.empty:
@@ -267,8 +267,8 @@ def main() -> None:
     else:
         print("  WARNING: validation panel is empty")
 
-    # ── Summary ─────────────────────────────────────────────────────────
-    print("\n── Summary ─────────────────────────────────────────────")
+    # Summary
+    print("\nSummary")
     if not validation.empty:
         print(f"  Validation panel: {len(validation):,} records")
         print(f"  Date range: {validation['date'].min():%Y-%m} to {validation['date'].max():%Y-%m}")

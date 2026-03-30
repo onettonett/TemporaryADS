@@ -24,7 +24,6 @@ import pathlib
 import pandas as pd
 import numpy as np
 import warnings
-from typing import Tuple
 
 warnings.filterwarnings("ignore")
 
@@ -56,9 +55,7 @@ except ImportError:
     print("  [Warning] scikit-learn not available – skipping clustering analysis")
 
 
-# ═══════════════════════════════════════════════════════════════════════════
 # Core Analysis Functions
-# ═══════════════════════════════════════════════════════════════════════════
 
 def load_inflation_results() -> pd.DataFrame:
     """Load computed group inflation rates."""
@@ -252,7 +249,7 @@ def plot_inflation_inequality_heatmap(inflation: pd.DataFrame,
 
 
 def cluster_households_by_inflation(inflation: pd.DataFrame,
-                                     n_clusters: int = 5) -> Tuple[pd.DataFrame, dict]:
+                                     n_clusters: int = 5) -> tuple[pd.DataFrame, dict]:
     """
     Cluster household archetypes by their inflation experience (k-means).
 
@@ -308,16 +305,14 @@ def cluster_households_by_inflation(inflation: pd.DataFrame,
     return group_stats, dict(cluster_summary.to_dict("index"))
 
 
-# ═══════════════════════════════════════════════════════════════════════════
 # Main Analysis
-# ═══════════════════════════════════════════════════════════════════════════
 
 def main() -> None:
     print("=" * 70)
     print("ANALYZING INFLATION INEQUALITY")
     print("=" * 70)
 
-    # ── 1. Load results ──────────────────────────────────────────────────────
+    # 1. Load results
     print("\n[1/5] Loading group inflation rates...")
     inflation = load_inflation_results()
     print(f"  Loaded {len(inflation):,} observations")
@@ -325,7 +320,7 @@ def main() -> None:
     print(f"  Archetype groups: {inflation['archetype_value'].nunique()}")
     print(f"  Years: {sorted(inflation['year'].unique())}")
 
-    # ── 2. Compute inequality metrics ────────────────────────────────────────
+    # 2. Compute inequality metrics
     print("\n[2/5] Computing inflation inequality gaps...")
     gaps = compute_inflation_gaps(inflation)
     print(f"\nInflation inequality (max - min) by archetype:\n{gaps.to_string(index=False)}")
@@ -333,7 +328,7 @@ def main() -> None:
     gaps.to_csv(ANALYSIS / "inflation_inequality_gaps.csv", index=False)
     print(f"\n  Saved: {ANALYSIS / 'inflation_inequality_gaps.csv'}")
 
-    # ── 3. Extract and save key comparisons ──────────────────────────────────
+    # 3. Extract and save key comparisons
     print("\n[3/5] Extracting key group comparisons...")
 
     archetype_dims = ["income_quintile", "tenure_type", "region_broad", "hrp_age_band"]
@@ -344,7 +339,7 @@ def main() -> None:
             subset.to_csv(ANALYSIS / csv_name)
             print(f"  Saved: {ANALYSIS / csv_name}")
 
-    # ── 4. Clustering analysis ───────────────────────────────────────────────
+    # 4. Clustering analysis
     print("\n[4/5] Clustering household archetypes by inflation experience...")
     clusters, cluster_summary = cluster_households_by_inflation(inflation, n_clusters=5)
 
@@ -359,7 +354,7 @@ def main() -> None:
                   f"mean_inflation={stats['mean_inflation']:.2f}%, "
                   f"recent_inflation={stats['recent_inflation']:.2f}%")
 
-    # ── 5. Create visualizations ────────────────────────────────────────────
+    # 5. Create visualizations
     print("\n[5/5] Generating visualizations...")
     if HAS_MATPLOTLIB:
         plot_inflation_by_income_quintile(inflation)
@@ -372,7 +367,7 @@ def main() -> None:
     else:
         print("  [Skipped] Matplotlib not available")
 
-    # ── Summary ──────────────────────────────────────────────────────────────
+    # Summary
     print("\n" + "=" * 70)
     print("SUMMARY: KEY FINDINGS")
     print("=" * 70)

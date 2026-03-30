@@ -30,22 +30,13 @@ echo "Python version:"
 python3 --version
 echo ""
 
-# ──────────────────────────────────────────────────────────────────────────────
 # STEP 1: Extract and clean data from raw sources
-# ──────────────────────────────────────────────────────────────────────────────
 
 echo "───────────────────────────────────────────────────────────────────────────"
 echo "STEP 1: Data Extraction & Cleaning"
 echo "───────────────────────────────────────────────────────────────────────────"
 echo ""
-echo "This step loads raw survey data and ONS price indices, extracts target"
-echo "variables, and outputs clean intermediate datasets ready for analysis."
-echo ""
-echo "Modules to run:"
-echo "  1. wrangle_frs.py   – Family Resources Survey (income, benefits)"
-echo "  2. wrangle_lcf.py   – Living Costs Survey (expenditure, demographics)"
-echo "  3. wrangle_mm23.py  – CPIH price indices (monthly)"
-echo "  4. wrangle_hci.py   – Household Costs Index (supplementary)"
+echo "This loads LCF shares and CPIH/HCI prices, then builds group inflation."
 echo ""
 echo "Running: python run_pipeline.py"
 echo ""
@@ -57,9 +48,7 @@ echo ""
 echo "✅ Step 1 complete. Outputs in data/interim/ and data/processed/"
 echo ""
 
-# ──────────────────────────────────────────────────────────────────────────────
 # STEP 2: Compute group-specific inflation rates
-# ──────────────────────────────────────────────────────────────────────────────
 
 echo "───────────────────────────────────────────────────────────────────────────"
 echo "STEP 2: Computing Group-Specific Inflation Rates"
@@ -84,9 +73,7 @@ echo "   • data/processed/inflation_decomposition.parquet"
 echo "   • data/processed/archetype_inflation_summary.parquet"
 echo ""
 
-# ──────────────────────────────────────────────────────────────────────────────
 # STEP 3: Analyze and visualize results
-# ──────────────────────────────────────────────────────────────────────────────
 
 echo "───────────────────────────────────────────────────────────────────────────"
 echo "STEP 3: Analysis & Visualization"
@@ -109,9 +96,7 @@ echo "   • data/analysis/     (CSV tables)"
 echo "   • plots/             (PNG charts)"
 echo ""
 
-# ──────────────────────────────────────────────────────────────────────────────
 # VERIFICATION & SUMMARY
-# ──────────────────────────────────────────────────────────────────────────────
 
 echo "───────────────────────────────────────────────────────────────────────────"
 echo "VERIFICATION & SUMMARY"

@@ -16,7 +16,7 @@
 
 - **Income restrictions**: only `eqincdmp > 0` observations are assigned an income quintile; zero/negative incomes are left as NaN. This excludes a small number of households with reported zero or negative equivalised income.
 
-- **Disability definition is benefit-based, not condition-based**: the LCF does not ask about long-standing illness or disability directly. The `is_disability` flag relies on disability benefit receipt (DLA/PIP/AA), which under-counts disabled people who do not claim benefits. The FRS has a broader disability definition. Prevalence is ~12% in LCF vs ~15% in FRS.
+- **Disability definition is benefit-based, not condition-based**: the LCF does not ask about long-standing illness or disability directly. The `is_disability` flag relies on disability benefit receipt (DLA/PIP/AA), which under-counts disabled people who do not claim benefits.
 
 - **Carer classification is benefit-based**: `is_carer` relies on Carer's Allowance receipt (b343 > 0), which under-counts unpaid carers who do not claim. Only ~2.7% of households are flagged.
 

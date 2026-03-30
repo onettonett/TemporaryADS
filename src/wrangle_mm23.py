@@ -37,7 +37,7 @@ PROCESSED = ROOT / "data" / "processed"
 INTERIM.mkdir(parents=True, exist_ok=True)
 PROCESSED.mkdir(parents=True, exist_ok=True)
 
-# ── CPIH INDEX series: COICOP division level (2015=100) ─────────────────────
+# CPIH INDEX series: COICOP division level (2015=100)
 # Verified against the actual MM23 column positions.
 
 CPIH_INDEX_SERIES = {
@@ -54,6 +54,8 @@ CPIH_INDEX_SERIES = {
     "L52C": {"coicop": "10", "label": "education"},
     "L52D": {"coicop": "11", "label": "restaurants_hotels"},
     "L52E": {"coicop": "12", "label": "misc_goods_services"},
+    "L536": {"coicop": "04.1", "label": "actual_rents"},
+    "L53D": {"coicop": "04.5", "label": "electricity_gas_fuels"},
 }
 
 # Additional group-level series for finer-grained analysis
@@ -64,7 +66,7 @@ CPIH_INDEX_GROUPS = {
     "L52J": {"coicop": "01.1.2", "label": "meat"},
 }
 
-# ── CPIH WEIGHTS series: COICOP division level (parts per 1000) ─────────────
+# CPIH WEIGHTS series: COICOP division level (parts per 1000)
 
 CPIH_WEIGHT_SERIES = {
     "L5CY": {"coicop": "00", "label": "all_items"},
@@ -82,7 +84,7 @@ CPIH_WEIGHT_SERIES = {
     "L5DC": {"coicop": "12", "label": "misc_goods_services"},
 }
 
-# ── Month abbreviation to number mapping ────────────────────────────────────
+# Month abbreviation to number mapping
 
 MONTH_MAP = {
     "JAN": 1, "FEB": 2, "MAR": 3, "APR": 4, "MAY": 5, "JUN": 6,
@@ -97,9 +99,10 @@ def load_mm23() -> tuple[pd.Series, pd.Series, pd.DataFrame]:
     - cdids: Series of CDID codes (row 1)
     - data_df: all data rows (row 7+), first column is the date string
     """
-    titles = pd.read_csv(RAW, nrows=1, header=None, dtype=str).iloc[0]
-    cdids = pd.read_csv(RAW, skiprows=1, nrows=1, header=None, dtype=str).iloc[0]
-    data = pd.read_csv(RAW, skiprows=7, header=None, dtype=str)
+    raw = pd.read_csv(RAW, header=None, dtype=str)
+    titles = raw.iloc[0]
+    cdids = raw.iloc[1]
+    data = raw.iloc[7:].reset_index(drop=True)
     return titles, cdids, data
 
 
@@ -238,19 +241,19 @@ def compute_annual_average_indices(monthly: pd.DataFrame) -> pd.DataFrame:
     return annual
 
 
-# ── Main pipeline ───────────────────────────────────────────────────────────
+# Main pipeline
 
 def main() -> None:
     print("=" * 60)
     print("MM23 / CPIH Data Wrangling Pipeline")
     print("=" * 60)
 
-    # ── 1. Load MM23 ────────────────────────────────────────────────────
+    # 1. Load MM23
     print("\n[1/5] Loading MM23 CSV...")
     titles, cdids, data = load_mm23()
     print(f"  Loaded: {data.shape[0]} data rows, {data.shape[1]} columns")
 
-    # ── 2. Extract monthly CPIH indices (division level) ────────────────
+    # 2. Extract monthly CPIH indices (division level)
     print("\n[2/5] Extracting monthly CPIH indices (division level)...")
     all_index_series = {**CPIH_INDEX_SERIES, **CPIH_INDEX_GROUPS}
     indices = extract_monthly_indices(cdids, data, all_index_series)
@@ -260,21 +263,21 @@ def main() -> None:
     print(f"  Series: {indices['label'].nunique()} CPIH index series")
     print(f"  Date range: {indices['date'].min():%Y-%m} to {indices['date'].max():%Y-%m}")
 
-    # ── 3. Extract annual CPIH weights ──────────────────────────────────
+    # 3. Extract annual CPIH weights
     print("\n[3/5] Extracting annual CPIH weights...")
     weights = extract_annual_weights(cdids, data, CPIH_WEIGHT_SERIES)
     print(f"  Extracted {len(weights):,} weight observations")
     if len(weights) > 0:
         print(f"  Years: {weights['year'].min()} to {weights['year'].max()}")
 
-    # ── 4. Save interim files ───────────────────────────────────────────
+    # 4. Save interim files
     print("\n[4/5] Saving interim files...")
     indices.to_parquet(INTERIM / "mm23_cpih_indices.parquet", index=False)
     weights.to_parquet(INTERIM / "mm23_cpih_weights.parquet", index=False)
     print(f"  Saved: {INTERIM / 'mm23_cpih_indices.parquet'}")
     print(f"  Saved: {INTERIM / 'mm23_cpih_weights.parquet'}")
 
-    # ── 5. Build analysis-ready monthly panel ───────────────────────────
+    # 5. Build analysis-ready monthly panel
     print("\n[5/5] Building analysis-ready monthly index panel...")
     # Use division-level only for the wide panel
     div_indices = indices[indices["cdid"].isin(CPIH_INDEX_SERIES)].copy()
@@ -286,8 +289,8 @@ def main() -> None:
     print(f"  Saved: {PROCESSED / 'cpih_monthly_indices.parquet'}")
     print(f"  Saved: {PROCESSED / 'cpih_annual_fy_indices.parquet'}")
 
-    # ── Summary ─────────────────────────────────────────────────────────
-    print("\n── Summary ─────────────────────────────────────────────")
+    # Summary
+    print("\nSummary")
     print(f"  Monthly panel: {monthly_wide.shape[0]} months × {monthly_wide.shape[1]} columns")
     print(f"  Annual FY averages: {annual_avg.shape[0]} years")
 
