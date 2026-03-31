@@ -5,10 +5,9 @@ Core scripts
 - src/wrangle_mm23.py
 - src/wrangle_hci.py
 - src/compute_group_inflation.py
-- src/analyze_inflation_inequality.py
 - src/visualise_inflation.py
-- src/data_exploration_deep.py
 - src/diagnose_data_issues.py
+- src/run_pipeline.py
 
 Docs & helpers
 - ANALYSIS_README.md

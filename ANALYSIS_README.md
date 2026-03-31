@@ -10,14 +10,10 @@ Pipeline builds household-type inflation using LCF expenditure weights and CPIH/
    - `data/processed/group_inflation_rates.parquet`
    - `data/processed/inflation_decomposition.parquet`
    - `data/processed/archetype_inflation_summary.parquet`
-5. `analyze_inflation_inequality.py` – summary CSVs and line charts per archetype.
-6. `visualise_inflation.py` – additional charts from the processed inflation/decomposition files.
-7. `data_exploration_deep.py` – HCI/CPIH exploratory plots.
+5. `visualise_inflation.py` – five-phase visualisation strategy (sample coverage, expenditure heterogeneity, price environment, group-specific inflation, HCI validation); outputs 32 charts to `data/processed/charts/`.
 
 ## Run
 ```bash
 python src/run_pipeline.py
-python src/analyze_inflation_inequality.py
 python src/visualise_inflation.py
-python src/data_exploration_deep.py
 ```

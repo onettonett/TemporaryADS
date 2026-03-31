@@ -25,7 +25,15 @@ CONCORDANCE: Dict[str, str] = {
     "share_02_alcohol_tobacco": "alcohol_tobacco",
     "share_03_clothing_footwear": "clothing_footwear",
     "share_04_actual_rent": "actual_rents",
-    "share_04_energy_other": "electricity_gas_fuels",
+    # share_04_energy_other = COICOP 04 minus actual rent (energy + water + maintenance).
+    # The LCF cannot isolate energy (04.5) from water (04.4) and maintenance (04.3) at
+    # household level.  Mapping to the pure electricity_gas_fuels index would overstate
+    # the energy price shock by ~2-3×; mapping to the full housing_fuel_power (COICOP 04)
+    # composite understates because stable rent prices dampen the index.
+    # Instead we derive 'non_rent_housing_fuel': the price change for the non-rent portion
+    # of COICOP 04, computed by backing actual-rents out of housing_fuel_power using OLS
+    # weights fitted on pre-crisis years.  See derive_non_rent_hfp() below.
+    "share_04_energy_other": "non_rent_housing_fuel",
     "share_05_furnishings": "furnishings",
     "share_06_health": "health",
     "share_07_transport": "transport",
@@ -37,14 +45,14 @@ CONCORDANCE: Dict[str, str] = {
 }
 
 ARCHETYPE_COLS: List[str] = [
+    "income_quintile",
     "tenure_type",
     "region_broad",
     "hrp_age_band",
     "hh_composition",
     "employment_status",
     "is_pensioner",
-    "is_disability",
-    "is_carer",
+    "care_impacted",
 ]
 
 
@@ -60,16 +68,80 @@ def load_lcf() -> pd.DataFrame:
 def load_prices() -> pd.DataFrame:
     prices = pd.read_parquet(PROCESSED / "cpih_monthly_indices.parquet")
     prices["date"] = pd.to_datetime(prices["date"])
-    prices["fy_year"] = prices["date"].dt.year
+    # fy_year is already set by wrangle_mm23.py as April-March financial year.
+    # Do NOT overwrite with date.dt.year (calendar year) — LCF data follows
+    # financial years, so Laspeyres baskets must be paired with FY price changes.
     return prices
 
 
+def _estimate_rent_weight(monthly_path: pathlib.Path) -> float:
+    """Estimate the weight of actual_rents within housing_fuel_power by
+    regressing monthly index LEVELS (not rates).
+
+    Fitting on levels rather than rates recovers a reliable compositional
+    weight because it exploits the long-run co-movement of the indices
+    rather than short-run rate volatility, which is dominated by energy.
+
+    Returns the implied weight w such that:
+        housing_fuel_power ≈ w * actual_rents + (1-w) * non_rent_component
+    Clamped to [0.15, 0.55] — a range consistent with ONS CPIH methodology
+    (actual rents is roughly 20-30% of COICOP 04 in recent years).
+    """
+    try:
+        m = pd.read_parquet(monthly_path)
+        m = m[["actual_rents", "housing_fuel_power"]].dropna()
+        X = np.column_stack([m["actual_rents"].values, np.ones(len(m))])
+        coeffs, _, _, _ = np.linalg.lstsq(X, m["housing_fuel_power"].values, rcond=None)
+        w = float(np.clip(coeffs[0], 0.15, 0.55))
+    except Exception:
+        w = 0.25  # fallback: ONS-consistent prior
+    return w
+
+
+def _derive_non_rent_hfp(pct: pd.DataFrame) -> pd.DataFrame:
+    """Derive a 'non_rent_housing_fuel' price change series by backing actual
+    rents out of the COICOP 04 composite (housing_fuel_power).
+
+    The weight of actual_rents within housing_fuel_power (β_rents) is
+    estimated from monthly index LEVELS (see _estimate_rent_weight).
+    The non-rent component rate is then:
+
+        non_rent_rate = (housing_fuel_power_rate − β_rents × actual_rents_rate)
+                        / (1 − β_rents)
+
+    This gives a price index for the non-rent, non-OOH portion of COICOP 04
+    (energy + water + maintenance) that is more accurate than either the
+    pure electricity_gas_fuels index (overstatement ~2-3×) or the composite
+    housing_fuel_power (understatement because rent dampens the index).
+    """
+    needed = {"housing_fuel_power", "actual_rents"}
+    if not needed.issubset(pct.columns):
+        pct = pct.copy()
+        pct["non_rent_housing_fuel"] = pct.get("housing_fuel_power", np.nan)
+        return pct
+
+    beta_rents = _estimate_rent_weight(PROCESSED / "cpih_monthly_indices.parquet")
+    pct = pct.copy()
+    pct["non_rent_housing_fuel"] = (
+        (pct["housing_fuel_power"] - beta_rents * pct["actual_rents"])
+        / max(1.0 - beta_rents, 0.15)
+    )
+    print(f"    non_rent_housing_fuel: β_rents={beta_rents:.3f} "
+          f"(level-based OLS over all monthly data)")
+    return pct
+
+
 def annual_price_changes(prices: pd.DataFrame) -> pd.DataFrame:
-    price_cols = list(CONCORDANCE.values())
-    annual = prices.groupby("fy_year")[price_cols].mean().sort_index()
+    # Collect all sub-indices needed, including the raw series used by _derive_non_rent_hfp
+    raw_cols = list(set(CONCORDANCE.values()) | {
+        "housing_fuel_power", "actual_rents", "electricity_gas_fuels"
+    })
+    available = [c for c in raw_cols if c in prices.columns]
+    annual = prices.groupby("fy_year")[available].mean().sort_index()
     pct = annual.pct_change() * 100
     pct.index.name = "year"
     pct = pct.reset_index().dropna()
+    pct = _derive_non_rent_hfp(pct)
     return pct
 
 

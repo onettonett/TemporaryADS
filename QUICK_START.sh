@@ -20,14 +20,21 @@ echo "Project root: $PROJECT_ROOT"
 echo "Script directory: $SRC"
 echo ""
 
-# Check that we can access Python
-if ! command -v python3 &> /dev/null; then
-    echo "ERROR: python3 not found. Please install Python 3.8+."
+# Choose Python interpreter from the active environment.
+# Prefer `python` so conda/venv activation is respected on macOS.
+PYTHON_BIN="${PYTHON_BIN:-python}"
+
+if ! command -v "$PYTHON_BIN" &> /dev/null; then
+    echo "ERROR: '$PYTHON_BIN' not found. Activate your environment first."
+    echo "  Conda: conda activate ads"
+    echo "  venv:  source .venv/bin/activate"
     exit 1
 fi
 
+echo "Python interpreter:"
+command -v "$PYTHON_BIN"
 echo "Python version:"
-python3 --version
+"$PYTHON_BIN" --version
 echo ""
 
 # STEP 1: Extract and clean data from raw sources
@@ -42,7 +49,7 @@ echo "Running: python run_pipeline.py"
 echo ""
 
 cd "$SRC"
-python3 run_pipeline.py
+"$PYTHON_BIN" run_pipeline.py
 
 echo ""
 echo "✅ Step 1 complete. Outputs in data/interim/ and data/processed/"
@@ -64,7 +71,7 @@ echo ""
 echo "Running: python compute_group_inflation.py"
 echo ""
 
-python3 compute_group_inflation.py
+"$PYTHON_BIN" compute_group_inflation.py
 
 echo ""
 echo "✅ Step 2 complete. Main outputs:"
@@ -73,27 +80,26 @@ echo "   • data/processed/inflation_decomposition.parquet"
 echo "   • data/processed/archetype_inflation_summary.parquet"
 echo ""
 
-# STEP 3: Analyze and visualize results
+# STEP 3: Visualise results
 
 echo "───────────────────────────────────────────────────────────────────────────"
-echo "STEP 3: Analysis & Visualization"
+echo "STEP 3: Visualisation (Five-Phase Strategy)"
 echo "───────────────────────────────────────────────────────────────────────────"
 echo ""
-echo "Generates:"
-echo "  • CSV summary tables (for dissertation)"
-echo "  • PNG line charts (inflation trends by income, tenure, region, age)"
-echo "  • Heatmaps (inflation inequality over time)"
-echo "  • K-means clustering (household profiles by inflation loss)"
+echo "Generates 32 charts across five phases:"
+echo "  • Phase 1: Sample and Coverage"
+echo "  • Phase 2: Expenditure Heterogeneity"
+echo "  • Phase 3: The Price Environment"
+echo "  • Phase 4: Group-Specific Inflation"
+echo "  • Phase 5: Validation Against HCI"
 echo ""
-echo "Running: python analyze_inflation_inequality.py"
+echo "Running: python visualise_inflation.py"
 echo ""
 
-python3 analyze_inflation_inequality.py
+"$PYTHON_BIN" visualise_inflation.py
 
 echo ""
-echo "✅ Step 3 complete. Outputs in:"
-echo "   • data/analysis/     (CSV tables)"
-echo "   • plots/             (PNG charts)"
+echo "✅ Step 3 complete. Charts saved to: data/processed/charts/"
 echo ""
 
 # VERIFICATION & SUMMARY
@@ -106,7 +112,7 @@ echo ""
 # Check that key outputs exist
 if [ -f "$PROJECT_ROOT/data/processed/group_inflation_rates.parquet" ]; then
     echo "✅ group_inflation_rates.parquet exists"
-    python3 -c "
+    "$PYTHON_BIN" -c "
 import pandas as pd
 df = pd.read_parquet('$PROJECT_ROOT/data/processed/group_inflation_rates.parquet')
 print(f'   Rows: {len(df):,}')
@@ -121,13 +127,9 @@ fi
 
 echo ""
 
-# Count CSV files
-csv_count=$(find "$PROJECT_ROOT/data/analysis/" -name "*.csv" 2>/dev/null | wc -l)
-echo "✅ CSV files generated: $csv_count"
-
-# Count PNG files
-png_count=$(find "$PROJECT_ROOT/plots/" -name "*.png" 2>/dev/null | wc -l)
-echo "✅ PNG charts generated: $png_count"
+# Count charts
+chart_count=$(find "$PROJECT_ROOT/data/processed/charts/" -name "*.png" 2>/dev/null | wc -l)
+echo "✅ Charts generated: $chart_count (in data/processed/charts/)"
 
 echo ""
 echo "───────────────────────────────────────────────────────────────────────────"
@@ -138,21 +140,14 @@ echo "📊 RESULTS SUMMARY"
 echo ""
 echo "Key findings in: data/processed/group_inflation_rates.parquet"
 echo "  • Rows: one per (archetype, year)"
-echo "  • Columns: archetype_name, archetype_value, year, inflation_rate, ..."
+echo "  • Columns: archetype_name, archetype_value, year, inflation_rate"
 echo ""
-echo "CSV tables for dissertation:"
-echo "  • data/analysis/inflation_by_income_quintile.csv"
-echo "  • data/analysis/inflation_by_tenure.csv"
-echo "  • data/analysis/inflation_by_region.csv"
-echo "  • data/analysis/inflation_by_hrp_age_band.csv"
-echo "  • data/analysis/archetype_clusters.csv"
-echo ""
-echo "PNG charts for dissertation:"
-echo "  • plots/inflation_by_income_quintile.png"
-echo "  • plots/inflation_by_tenure.png"
-echo "  • plots/inflation_by_region.png"
-echo "  • plots/inflation_by_age_band.png"
-echo "  • plots/inflation_heatmap_*.png"
+echo "Charts for dissertation (data/processed/charts/):"
+echo "  • p2_4_basket_income_quintile.png  — expenditure shares Q1–Q5"
+echo "  • p4_series_income_quintile.png    — group inflation lines vs CPIH"
+echo "  • p4_gap_*.png                     — annual inflation gap bar charts"
+echo "  • p4_cumulative_*.png              — cumulative purchasing power loss"
+echo "  • p5_*_comparison.png              — validation against HCI"
 echo ""
 echo "───────────────────────────────────────────────────────────────────────────"
 echo "NEXT STEPS FOR YOUR DISSERTATION"
@@ -164,23 +159,21 @@ echo "   inflation = pd.read_parquet('data/processed/group_inflation_rates.parqu
 echo "   inflation.groupby('archetype_name')['inflation_rate'].mean()"
 echo ""
 echo "2. VALIDATE FINDINGS"
-echo "   ✓ Does Q5 (richest) face lower inflation than Q1 (poorest)?"
+echo "   ✓ Does Q1 (poorest) face higher inflation than Q5 (richest)?"
 echo "   ✓ Is 2022-2023 spike visible for food/energy inflation?"
-echo "   ✓ Does your pensioner result match ONS pensioner CPI?"
+echo "   ✓ Does your pensioner result match HCI Retired?"
 echo ""
 echo "3. WRITE YOUR DISSERTATION"
-echo "   ✓ Use CSV tables in Results section"
-echo "   ✓ Include PNG charts as Figures"
+echo "   ✓ Include PNG charts as Figures from data/processed/charts/"
 echo "   ✓ Follow structure in ANALYSIS_README.md"
 echo "   ✓ Document limitations in Methodology"
 echo ""
 echo "4. KEY REFERENCES"
-echo "   📖 ANALYSIS_README.md - comprehensive guide (300+ lines)"
-echo "   📖 COMPLETION_STATUS.md - what's been built, next steps"
+echo "   📖 ANALYSIS_README.md - pipeline overview"
+echo "   📖 COMPLETION_STATUS.md - component status"
 echo "   📖 src/compute_group_inflation.py - methodology comments"
 echo ""
 echo "───────────────────────────────────────────────────────────────────────────"
 echo ""
-echo "Questions? Check ANALYSIS_README.md for detailed documentation."
-echo "Ready to write your dissertation!"
+echo "Questions? Check ANALYSIS_README.md for documentation."
 echo ""

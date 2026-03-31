@@ -1,0 +1,13 @@
+name: ads
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - pandas
+  - numpy
+  - pyarrow
+  - matplotlib
+  - seaborn
+  - scikit-learn
+  - pyreadstat
+  - openpyxl

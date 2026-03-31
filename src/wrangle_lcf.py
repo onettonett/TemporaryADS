@@ -548,15 +548,14 @@ def winsorise_shares(df: pd.DataFrame) -> pd.DataFrame:
 
 def _aggregate_person_to_household(dvper: pd.DataFrame) -> pd.DataFrame:
     """
-    Aggregate person-level data to household level for disability,
-    carer status, and employment composition flags.
+    Aggregate person-level data to household level for disability/carer
+    (care_impacted) and employment composition flags.
 
     Returns one row per (case, year) with:
     - hrp_age, hrp_sex       : HRP demographics (person == 1)
     - hrp_econ_pos            : HRP economic position (a206)
     - hrp_emp_position        : HRP employment position (a015)
-    - is_disability           : any person receives DLA/PIP/AA
-    - is_carer                : any person receives Carer's Allowance
+    - care_impacted           : any person has disability benefit or Carer's Allowance
     - n_working, n_retired,
       n_unemployed, n_adults_per : counts for employment composition
     """
@@ -580,16 +579,6 @@ def _aggregate_person_to_household(dvper: pd.DataFrame) -> pd.DataFrame:
 
     # Remove any duplicate columns from sequential merges
     hrp = hrp.loc[:, ~hrp.columns.duplicated()]
-
-    # Captures DLA (self-care b403 + mobility b405), Attendance Allowance
-    # (b421), and PIP (care b552 + mobility b553).
-
-    # DISABILITY FLAG implemented - defined as any person in the household receiving a disability benefit.    
-    # 3 notable systems of disability benefits:
-    # DLA was the old system of Non-means tested disability benefits: Care component (b403) and Mobility component (b405).
-    # PIP is the new system of means tested disability benefits: Daily Living component (b552) and Mobility component (b553).
-    # Basically, DLA was gradually replaced by PIP over [2015,2023] so both needed.
-    # AA is for people who have reached state pension age and have a severe disability that requires someone to care for them.
 
     disability_cols = _safe_cols(per, ["dla_self_care_weekly", "dla_mobility_weekly","attendance_allowance_weekly", "pip_daily_living_weekly", "pip_mobility_weekly",])
 
@@ -621,6 +610,8 @@ def _aggregate_person_to_household(dvper: pd.DataFrame) -> pd.DataFrame:
         hrp["is_carer"] = hrp["is_carer"].fillna(False)
     else:
         hrp["is_carer"] = False
+
+    hrp["care_impacted"] = (hrp["is_disability"].fillna(False)) | (hrp["is_carer"].fillna(False))
 
     # Employment flag implemented - defined as any individual being employed, retired, or unemployed.
     # ILO codes from database: 0=not recorded, 1=self-employed, 2=FT employee, 3=PT employee, 4=unemployed, 5=govt training, 6=retired, 7=retired/under pension age
@@ -840,15 +831,14 @@ def add_lcf_archetypes(
     choices = ["single_parent", "couple_with_children", "no_children"]
     df["hh_composition"] = np.select(conditions, choices, default="unknown")
 
-    # Group 5: Disability (already merged from person aggregation)
-    # is_disability is already in df from _aggregate_person_to_household
-    # Ensure it's boolean
-    df["is_disability"] = df["is_disability"].fillna(False).astype(bool)
+    # Group 5: Care impacted (disability OR carer)
+    df["care_impacted"] = (
+        df["is_disability"].fillna(False).astype(bool)
+        | df["is_carer"].fillna(False).astype(bool)
+    )
+    df = df.drop(columns=["is_disability", "is_carer"], errors="ignore")
 
-    # Group 6: Carer household (already merged)
-    df["is_carer"] = df["is_carer"].fillna(False).astype(bool)
-
-    # Group 7: Employment composition
+    # Group 6: Employment composition
     # Based on aggregated person-level economic position (a206)
     if "n_working" in df.columns:
         n_work = df["n_working"].fillna(0)
@@ -869,7 +859,7 @@ def add_lcf_archetypes(
     else:
         df["employment_status"] = "unknown"
 
-    # Group 8: Region
+    # Group 7: Region
     if "region_code" in df.columns:
         df["region"] = df["region_code"].map(REGION_LABELS).fillna("unknown")
         df["region_broad"] = df["region_code"].map(REGION_BROAD).fillna("unknown")
@@ -877,7 +867,7 @@ def add_lcf_archetypes(
         df["region"] = "unknown"
         df["region_broad"] = "unknown"
 
-    # Group 9: HRP age band
+    # Group 8: HRP age band
     if "hrp_age" in df.columns:
         bins = [0, 30, 50, 65, 75, 200]
         labels = ["under_30", "30_to_49", "50_to_64", "65_to_74", "75_plus"]
@@ -1067,13 +1057,9 @@ def main() -> None:
           f"{analysis['is_pensioner'].sum():,} "
           f"({100*analysis['is_pensioner'].mean():.1f}%)")
 
-    print(f"\n  Disability households: "
-          f"{analysis['is_disability'].sum():,} "
-          f"({100*analysis['is_disability'].mean():.1f}%)")
-
-    print(f"\n  Carer households: "
-          f"{analysis['is_carer'].sum():,} "
-          f"({100*analysis['is_carer'].mean():.1f}%)")
+    print(f"\n  Care-impacted households (carer or disability): "
+          f"{analysis['care_impacted'].sum():,} "
+          f"({100*analysis['care_impacted'].mean():.1f}%)")
 
     print(f"\n  Single-parent households: "
           f"{analysis['is_single_parent'].sum():,} "

@@ -4,6 +4,4 @@
 - wrangle_mm23.py ✅
 - wrangle_hci.py ✅ (optional)
 - compute_group_inflation.py ✅
-- analyze_inflation_inequality.py ✅
-- visualise_inflation.py ✅
-- data_exploration_deep.py ✅
+- visualise_inflation.py ✅ (five-phase strategy, 32 charts)
