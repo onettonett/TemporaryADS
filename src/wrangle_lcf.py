@@ -12,7 +12,7 @@ Pipeline steps
 --------------
 1. Extract  - load dvhh + dvper Stata files, select target variables
 2. Clean    - handle negatives, zeros, validate denominators
-3. Shares   - compute COICOP division expenditure shares, Winsorise
+3. Shares   - compute COICOP division expenditure shares, filter implausible records
 4. Classify - build household archetype flags (disability, children,
               tenure, pensioner, income quintile, employment, region, age)
 5. QA       - cell-size checks, share-sum validation, temporal diagnostics
@@ -25,7 +25,7 @@ Outputs
       disability benefits + economic position)
 - data/processed/lcf_expenditure_shares.parquet - household-level expenditure
       shares by COICOP division, with archetype classification variables,
-      Winsorised and quality-checked, ready for linking to CPIH indices.
+      domain-filtered and quality-checked, ready for linking to CPIH indices.
 
 Raw data in data/raw/LCF/ is never modified.
 """
@@ -288,11 +288,6 @@ REGION_BROAD = {
     12: "Northern Ireland",                 # Northern Ireland
 }
 
-# Winsorisation bounds
-
-WINSOR_LOWER = 0.01   # 1st percentile
-WINSOR_UPPER = 0.99   # 99th percentile
-
 # Minimum cell size for reliable group estimates
 
 MIN_CELL_SIZE = 100
@@ -401,9 +396,11 @@ def clean_expenditure(dvhh: pd.DataFrame) -> pd.DataFrame:
     # almost certainly data errors (incomplete diaries, annual figures entered
     # as weekly, transcription errors) rather than genuine extreme spenders.
     # We remove these BEFORE computing shares so the shares themselves are
-    # uncontaminated. We do NOT winsorise shares — genuine extreme spenders
-    # (e.g. fuel-poor pensioners at 45% energy share) are real households and
-    # suppressing them would directly hide the inequality we are measuring.
+    # uncontaminated. Implausible households (zero food, zero housing,
+    # negative total expenditure) are removed later by
+    # filter_implausible_households(). Genuine extreme spenders
+    # (e.g. fuel-poor pensioners at 45% energy share) are real households
+    # and suppressing them would directly hide the inequality we are measuring.
     PLAUSIBILITY_LOWER = 30.0    # below £30/week is almost certainly an incomplete diary
     PLAUSIBILITY_UPPER = 3000.0  # above £3,000/week is almost certainly a data entry error
 
@@ -473,7 +470,7 @@ def clean_expenditure(dvhh: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-# Step 3: Expenditure shares + Winsorisation
+# Step 3: Expenditure shares + Domain-based household filtering
 
 def compute_expenditure_shares(dvhh: pd.DataFrame) -> pd.DataFrame:
     """
@@ -523,25 +520,46 @@ def compute_expenditure_shares(dvhh: pd.DataFrame) -> pd.DataFrame:
 
     return df
 
-def winsorise_shares(df: pd.DataFrame) -> pd.DataFrame:
-    """Winsorise expenditure shares at 1st and 99th percentiles by year."""
-    res = df.copy()
-    # These are the expenditure shares that we just computed with compute_expenditure_shares()
-    share_cols = [c for c in res.columns if c.startswith("share_")]
+def filter_implausible_households(df: pd.DataFrame) -> pd.DataFrame:
+    """Remove households with demonstrably incomplete or erroneous diary records.
 
-    # Helper function only winsorises if enough values for the year to be confident about the extremities.
-    def winsorise_helper(share_values):
-        if len(share_values) < 20:
-            return share_values
-        lo = share_values.quantile(WINSOR_LOWER)
-        hi = share_values.quantile(WINSOR_UPPER)
-        return share_values.clip(lo, hi)
+    Expenditure shares are compositional (summing to 1.0 per household),
+    which precludes standard univariate cleaning methods like winsorisation
+    or per-column IQR — both break the budget constraint.  Instead we apply
+    household-level exclusion criteria grounded in domain knowledge:
 
-    # Apply winsorisation to each share column by year
-    for col in share_cols:
-        res[col] = res.groupby("year")[col].transform(winsorise_helper)
+    1. Negative total expenditure  — arithmetically impossible.
+    2. Zero food expenditure       — no household spends £0 on food over a
+       2-week LCF diary period; indicates an incomplete diary record.
+    3. Zero housing & utilities    — every UK household pays energy costs
+       at minimum (gas, electricity, water), even outright owners.
 
-    return res
+    Returns the filtered DataFrame (removed rows are printed for transparency).
+    """
+    n_before = len(df)
+
+    # Build exclusion mask
+    neg_exp = df["p600t"] <= 0 if "p600t" in df.columns else pd.Series(False, index=df.index)
+    zero_food = df["share_01_food_non_alcoholic"] == 0
+    zero_housing = df["share_04_housing_fuel_power"] == 0
+
+    exclude = neg_exp | zero_food | zero_housing
+
+    n_neg   = neg_exp.sum()
+    n_food  = zero_food.sum()
+    n_hous  = zero_housing.sum()
+    n_total = exclude.sum()
+
+    print(f"    Domain-based household filter:")
+    print(f"      Negative total expenditure:   {n_neg:>5}")
+    print(f"      Zero food expenditure:        {n_food:>5}")
+    print(f"      Zero housing & utilities:     {n_hous:>5}")
+    print(f"      Combined (with overlap):      {n_total:>5} of {n_before:,} "
+          f"({100 * n_total / n_before:.2f}%)")
+
+    result = df[~exclude].copy()
+    print(f"      Remaining households:         {len(result):>5}")
+    return result
         
 
 # CLASSIFY HOUSEHOLDS INTO DEMOGRAPHICS
@@ -1004,9 +1022,10 @@ def main() -> None:
     print("\n[4/6] Cleaning expenditure data...")
     cleaned = clean_expenditure(dvhh)
 
-    # 5. Compute shares, add archetypes
-    print("\n[5/6] Computing expenditure shares & adding archetypes...")
+    # 5. Compute shares, filter implausible households, add archetypes
+    print("\n[5/6] Computing expenditure shares & filtering...")
     analysis = compute_expenditure_shares(cleaned)
+    analysis = filter_implausible_households(analysis)
     analysis = add_lcf_archetypes(analysis, dvper)
 
     # Drop internal working columns

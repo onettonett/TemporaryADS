@@ -11,7 +11,7 @@ The outputs are used downstream to construct household-type-specific spending ba
 2. **Extract** - load person-level data for disability, employment, carer status
 3. **Interim save** - save raw extracted data before transformations
 4. **Clean** - handle negative expenditures, validate denominators, flag zeros
-5. **Shares + Archetypes** - compute COICOP shares, Winsorise, build all household group flags
+5. **Shares + Archetypes** - compute COICOP shares, filter implausible households, build all household group flags
 6. **QA** - cell-size checks, share-sum validation
 
 ### Inputs (raw)
@@ -39,7 +39,7 @@ The script writes three parquet datasets:
 
 - `data/processed/lcf_expenditure_shares.parquet`
   Household-year rows that start from `lcf_household` and add:
-  - `share_*` COICOP division expenditure shares (Winsorised)
+  - `share_*` COICOP division expenditure shares (domain-filtered)
   - Full archetype variables (see below)
 
 ### What is extracted (column selection decisions)
@@ -102,7 +102,7 @@ For each household-year observation:
 
 $$\text{share}_{d}=\frac{\text{division expenditure } (p60dt)}{\text{total COICOP expenditure (cleaned denominator)}}$$
 
-**Winsorisation**: after computing shares, values are clipped to within-year [1st, 99th] percentile bounds. This addresses diary artefacts (e.g. a household reporting 95% of spending on education in a two-week diary period) while preserving sample size.
+**Household filtering**: after computing shares, we remove households with demonstrably incomplete or erroneous diary records: negative total expenditure (7), zero food expenditure (296), or zero housing & utilities expenditure (50) — totalling 350 households (0.76%). Standard per-column winsorisation is inappropriate here because expenditure shares are compositional (summing to unity per household); clipping individual shares would break the budget constraint.
 
 **Validation**: the pipeline checks that share sums are approximately 1.0 and reports deviations.
 

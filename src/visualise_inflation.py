@@ -38,7 +38,8 @@ _P2 = CHARTS / "02_expenditure_patterns"
 _P3 = CHARTS / "03_price_environment"
 _P4 = CHARTS / "04_group_inflation"
 _P5 = CHARTS / "05_hci_validation"
-for _d in (_P1, _P2, _P3, _P4, _P5):
+_P6 = CHARTS / "06_clustering"
+for _d in (_P1, _P2, _P3, _P4, _P5, _P6):
     _d.mkdir(parents=True, exist_ok=True)
 
 plt.rcParams.update({"axes.spines.top": False, "axes.spines.right": False})
@@ -64,7 +65,7 @@ COICOP_SHORT = {
     "share_01_food_non_alcoholic":  "Food & NA Bev.",
     "share_02_alcohol_tobacco":     "Alcohol & Tobacco",
     "share_03_clothing_footwear":   "Clothing",
-    "share_04_housing_fuel_power":  "Housing & Fuel",
+    "share_04_housing_fuel_power":  "Housing & Utilities",
     "share_05_furnishings":         "Furnishings",
     "share_06_health":              "Health",
     "share_07_transport":           "Transport",
@@ -80,8 +81,8 @@ PRICE_SHORT = {
     "alcohol_tobacco":       "Alcohol & Tobacco",
     "clothing_footwear":     "Clothing",
     "actual_rents":           "Actual Rent",
-    "non_rent_housing_fuel":  "Non-Rent Housing & Fuel",
-    "housing_fuel_power":     "Housing, Fuel & Power (COICOP 04)",
+    "non_rent_housing_fuel":  "Home Energy & Utilities",
+    "housing_fuel_power":     "Housing & Utilities (COICOP 04)",
     "electricity_gas_fuels":  "Energy (elec/gas only)",
     "furnishings":           "Furnishings",
     "health":                "Health",
@@ -116,6 +117,9 @@ ARCHETYPE_TITLES = {
 }
 
 CRISIS_YEARS = (2022, 2023)
+
+# The four tenure groups used throughout the report (rent_free dropped: ~50/yr, unreliable)
+TENURE_4 = ["social_rent", "private_rent", "own_outright", "own_mortgage"]
 _TAB20 = plt.get_cmap("tab20")
 _TAB10 = plt.get_cmap("tab10")
 
@@ -187,8 +191,7 @@ def _sort_arch_values(arch: str, vals) -> list:
             v for v in vals if v not in ("True", "False")
         ]
     if arch == "tenure_type":
-        order = ["social_rent", "private_rent", "own_outright", "own_mortgage", "rent_free"]
-        return [v for v in order if v in vals] + [v for v in vals if v not in order]
+        return [v for v in TENURE_4 if v in vals]
     return sorted(vals)
 
 
@@ -352,8 +355,7 @@ def p2_basket_by_tenure(shares: pd.DataFrame) -> None:
         return
     w = "household_weight" if "household_weight" in shares.columns else None
     cols = [c for c in MAIN_SHARE_COLS if c in shares.columns]
-    order = ["social_rent", "private_rent", "own_outright", "own_mortgage", "rent_free"]
-    groups = [g for g in order if g in shares["tenure_type"].unique()]
+    groups = [g for g in TENURE_4 if g in shares["tenure_type"].unique()]
     labels = [g.replace("_", " ").title() for g in groups]
     comp = {g.replace("_", " ").title(): _wmean(shares[shares["tenure_type"] == g], cols, w)
             for g in groups}
@@ -366,53 +368,56 @@ def p2_basket_by_tenure(shares: pd.DataFrame) -> None:
 
 
 def p2_food_energy_density(shares: pd.DataFrame) -> None:
-    print("\n[P2-6] Food + energy share density by income quintile")
-    needed = {"income_quintile", "share_01_food_non_alcoholic", "share_04_energy_other"}
+    print("\n[P2-6] Food + energy + rent share density by tenure type")
+    needed = {"tenure_type", "share_01_food_non_alcoholic",
+              "share_04_energy_other", "share_04_actual_rent"}
     if not needed.issubset(shares.columns):
         print("  Missing required columns, skipping.")
         return
-    sub = shares.dropna(subset=list(needed)).copy()
-    sub["food_energy"] = sub["share_01_food_non_alcoholic"] + sub["share_04_energy_other"]
-    quintiles = sorted(sub["income_quintile"].unique(), key=float)
+    sub = shares[shares["tenure_type"].isin(TENURE_4)].dropna(subset=list(needed)).copy()
+    sub["essentials"] = (sub["share_01_food_non_alcoholic"]
+                         + sub["share_04_energy_other"]
+                         + sub["share_04_actual_rent"])
     fig, ax = plt.subplots(figsize=(9, 5))
-    for i, q in enumerate(quintiles):
-        vals = sub.loc[sub["income_quintile"] == q, "food_energy"].dropna().values
+    for i, t in enumerate(TENURE_4):
+        vals = sub.loc[sub["tenure_type"] == t, "essentials"].dropna().values
+        if len(vals) < 10:
+            continue
         counts, edges = np.histogram(vals, bins=80, density=True)
         centres = (edges[:-1] + edges[1:]) / 2
-        # Gaussian smoothing so the line is smooth rather than a jagged histogram step
         kernel_width = max(1, len(counts) // 15)
         kernel = np.exp(-0.5 * (np.arange(-kernel_width * 2, kernel_width * 2 + 1) / kernel_width) ** 2)
         kernel /= kernel.sum()
         smoothed = np.convolve(counts, kernel, mode="same")
-        ax.plot(centres, smoothed, label=QUINTILE_LABELS.get(str(q), str(q)),
-                color=_colour(i, len(quintiles)), linewidth=1.8)
-    ax.set_xlabel("Food + Non-Rent Housing (share_01 + share_04_energy_other)")
+        ax.plot(centres, smoothed, label=_label("tenure_type", t),
+                color=_colour(i, len(TENURE_4)), linewidth=1.8)
+    ax.set_xlabel("Food + Energy + Rent Share")
     ax.set_ylabel("Density")
-    ax.set_title("Distribution of Food & Non-Rent Housing Share by Income Quintile\n"
-                 "(Q1 concentrated at structurally higher shares than Q5)")
-    ax.legend(title="Quintile")
+    ax.set_title("Distribution of Essential Spending Share by Tenure Type\n"
+                 "(food + energy + rent — shows structural basket differences)")
+    ax.legend(title="Tenure")
     ax.yaxis.grid(True, linestyle="--", alpha=0.4)
     fig.tight_layout()
     _save(fig, "p2_6_food_energy_density.png", _P2)
 
 
 def p2_basket_shift(shares: pd.DataFrame) -> None:
-    print("\n[P2-7] Basket shift over time — Q1 vs Q5 small multiples")
-    if "income_quintile" not in shares.columns:
+    print("\n[P2-7] Basket shift over time — Private Rent vs Own Outright")
+    if "tenure_type" not in shares.columns:
         return
     w = "household_weight" if "household_weight" in shares.columns else None
     cols = [c for c in MAIN_SHARE_COLS if c in shares.columns]
     years = sorted(shares["year"].unique())
-    targets = {1.0: ("Q1", "steelblue"), 5.0: ("Q5", "tomato")}
-    # Pre-compute (quintile, year) weighted mean shares
+    targets = {"private_rent": ("Private Rent", "steelblue"),
+               "own_outright": ("Own Outright", "tomato")}
     records = []
-    for q, (qlabel, _) in targets.items():
+    for t, (tlabel, _) in targets.items():
         for yr in years:
-            sub = shares[(shares["income_quintile"] == q) & (shares["year"] == yr)]
+            sub = shares[(shares["tenure_type"] == t) & (shares["year"] == yr)]
             if sub.empty:
                 continue
             row = _wmean(sub, cols, w)
-            row.update({"year": yr, "quintile": qlabel})
+            row.update({"year": yr, "group": tlabel})
             records.append(row)
     df = pd.DataFrame(records)
     if df.empty:
@@ -421,11 +426,11 @@ def p2_basket_shift(shares: pd.DataFrame) -> None:
     fig, axes = plt.subplots(nrows_g, ncols_g, figsize=(14, nrows_g * 3), sharex=True)
     for idx, col in enumerate(cols):
         ax = axes.flat[idx]
-        for q, (qlabel, colour) in targets.items():
-            sub = df[df["quintile"] == qlabel][["year", col]].sort_values("year")
+        for t, (tlabel, colour) in targets.items():
+            sub = df[df["group"] == tlabel][["year", col]].sort_values("year")
             if not sub.empty and col in sub.columns:
                 ax.plot(sub["year"], sub[col], marker="o", color=colour,
-                        label=qlabel, linewidth=1.5, markersize=3)
+                        label=tlabel, linewidth=1.5, markersize=3)
         ax.set_title(COICOP_SHORT.get(col, col), fontsize=8)
         ax.yaxis.grid(True, linestyle="--", alpha=0.4)
         ax.tick_params(labelsize=7)
@@ -433,8 +438,9 @@ def p2_basket_shift(shares: pd.DataFrame) -> None:
         axes.flat[idx].set_visible(False)
     handles = [plt.Line2D([0], [0], color=c, label=l, lw=1.5)
                for _, (l, c) in targets.items()]
-    fig.legend(handles=handles, title="Quintile", loc="lower right", fontsize=8)
-    fig.suptitle("Basket Shift Over Time: Q1 vs Q5 by COICOP Division (2015–2023)", y=1.01)
+    fig.legend(handles=handles, title="Tenure", loc="lower right", fontsize=8)
+    fig.suptitle("Basket Shift Over Time: Private Rent vs Own Outright\n"
+                 "by COICOP Division (2015–2023)", y=1.01)
     fig.tight_layout()
     _save(fig, "p2_7_basket_shift.png", _P2)
 
@@ -472,7 +478,7 @@ def p3_monthly_index(monthly: pd.DataFrame) -> None:
         base_row = monthly.sort_values("date").iloc[[0]]
     base_vals = {c: float(base_row[c].iloc[0]) for c in cols if base_row[c].iloc[0] != 0}
     ms = monthly.sort_values("date")
-    highlight = {"food_non_alcoholic", "electricity_gas_fuels"}
+    highlight = {"food_non_alcoholic", "electricity_gas_fuels", "actual_rents"}
     fig, ax = plt.subplots(figsize=(13, 6))
     for col in cols:
         if base_vals.get(col, 0) == 0:
@@ -490,7 +496,7 @@ def p3_monthly_index(monthly: pd.DataFrame) -> None:
     ax.legend(handles=highlight_handles + [grey_handle], fontsize=8)
     ax.axhline(100, color="black", linewidth=0.7, linestyle="--", alpha=0.5)
     ax.set_ylabel("Index (Jan 2015 = 100)")
-    ax.set_title("CPIH Sub-Index Monthly Series (Jan 2015 = 100)\nFood & energy highlighted; other categories in grey")
+    ax.set_title("CPIH Sub-Index Monthly Series (Jan 2015 = 100)\nFood, energy & rents highlighted; other categories in grey")
     ax.yaxis.grid(True, linestyle="--", alpha=0.4)
     fig.tight_layout()
     _save(fig, "p3_9_monthly_index.png", _P3)
@@ -655,20 +661,14 @@ def _cumulative_ppp(infl: pd.DataFrame, headline: pd.Series, arch: str) -> None:
 
 
 def _select_main_archetypes(infl: pd.DataFrame) -> list:
-    """Main-body archetypes for the report.
+    """Main-body archetype for the report: tenure_type only.
 
-    These three are fixed by policy relevance rather than auto-selected by gap size:
-      - income_quintile : broadest distributional statement (the core thesis finding)
-      - hrp_age_band    : largest absolute gap (~3pp Q1 vs Q5 energy exposure); intergenerational
-      - is_pensioner    : triple-lock policy link; State Pension uprated by headline CPI
-
-    Auto-selecting by max-gap across all groups is unreliable because small-cell outlier
-    groups (rent_free ~50 hh/yr, has_unemployed) inflate the spread for tenure_type and
-    employment_status without reflecting genuine structural inequality.
+    Tenure type generates the largest inflation differentials of any household
+    dimension (2.0pp crisis gap vs 0.6pp for income quintile) and is the primary
+    analytical focus of the report.
     """
-    preferred = ["income_quintile", "hrp_age_band", "is_pensioner"]
     available = infl["archetype_name"].unique()
-    return [a for a in preferred if a in available]
+    return ["tenure_type"] if "tenure_type" in available else []
 
 
 def p4_main_body_extras(infl: pd.DataFrame, decomp: pd.DataFrame,
@@ -679,13 +679,20 @@ def p4_main_body_extras(infl: pd.DataFrame, decomp: pd.DataFrame,
     print(f"  Selected: {main_archs}")
     for arch in main_archs:
         sub = infl[infl["archetype_name"] == arch]
-        # Identify high-inflation and low-inflation groups by average rate
-        avg = sub.groupby("archetype_value")["inflation_rate"].mean()
-        hi_grp, lo_grp = avg.idxmax(), avg.idxmin()
-        if hi_grp == lo_grp:
+        vals_in_data = sub["archetype_value"].unique()
+        if arch == "tenure_type":
+            # Hardcode: own_mortgage highest in FY2022, private_rent lowest
+            hi_grp = "own_mortgage" if "own_mortgage" in vals_in_data else None
+            lo_grp = "private_rent" if "private_rent" in vals_in_data else None
+            all_groups = [v for v in TENURE_4 if v in vals_in_data]
+        else:
+            avg = sub.groupby("archetype_value")["inflation_rate"].mean()
+            hi_grp, lo_grp = avg.idxmax(), avg.idxmin()
+            all_groups = [hi_grp, lo_grp]
+        if not hi_grp or not lo_grp or hi_grp == lo_grp:
             continue
         _gap_bar(infl, headline, arch, hi_grp, lo_grp)
-        _crisis_decomp(decomp, arch, [hi_grp, lo_grp])
+        _crisis_decomp(decomp, arch, all_groups)   # all 4 tenure groups
         _cumulative_ppp(infl, headline, arch)
 
 
@@ -844,12 +851,332 @@ def p5_residual_scatter(infl: pd.DataFrame, hci: pd.DataFrame) -> None:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# NEW — Tenure-focused extras
+# ═══════════════════════════════════════════════════════════════════════════
+
+def p1_sample_by_tenure(shares: pd.DataFrame) -> None:
+    """Grouped bar: sample size per year for the 4 tenure groups."""
+    print("\n[P1] Sample size by tenure group and year")
+    sub = shares[shares["tenure_type"].isin(TENURE_4)]
+    counts = sub.groupby(["year", "tenure_type"]).size().reset_index(name="n")
+    years = sorted(counts["year"].unique())
+    x = np.arange(len(years))
+    width = 0.18
+    fig, ax = plt.subplots(figsize=(11, 5))
+    for i, t in enumerate(TENURE_4):
+        vals = [int(counts[(counts.year == y) & (counts.tenure_type == t)]["n"].sum()) for y in years]
+        bars = ax.bar(x + (i - 1.5) * width, vals, width=width,
+                       color=_colour(i, 4), label=_label("tenure_type", t))
+        for bar, v in zip(bars, vals):
+            ax.text(bar.get_x() + bar.get_width() / 2, v + 15, str(v),
+                    ha="center", va="bottom", fontsize=5.5)
+    ax.set_xticks(x)
+    ax.set_xticklabels([_fy(y) for y in years], rotation=30, ha="right")
+    ax.set_ylabel("Number of households")
+    ax.set_title("LCF Sample Size by Tenure Group and Financial Year")
+    ax.legend(fontsize=8)
+    ax.yaxis.grid(True, linestyle="--", alpha=0.5)
+    fig.tight_layout()
+    _save(fig, "p1_sample_by_tenure.png", _P1)
+
+
+def p1_share_sum_validation(shares: pd.DataFrame) -> None:
+    """Boxplot: COICOP share sums per household, one box per year."""
+    print("\n[P1] COICOP share-sum validation boxplot")
+    # Use the 12 Laspeyres shares (not the composite share_04_housing_fuel_power)
+    laspeyres_shares = [
+        "share_01_food_non_alcoholic", "share_02_alcohol_tobacco",
+        "share_03_clothing_footwear", "share_04_actual_rent",
+        "share_04_energy_other", "share_05_furnishings", "share_06_health",
+        "share_07_transport", "share_08_communication",
+        "share_09_recreation_culture", "share_10_education",
+        "share_11_restaurants_hotels", "share_12_misc_goods_services",
+    ]
+    avail = [c for c in laspeyres_shares if c in shares.columns]
+    if len(avail) < 10:
+        print("  Not enough share columns, skipping.")
+        return
+    shares_copy = shares.copy()
+    shares_copy["share_sum"] = shares_copy[avail].sum(axis=1)
+    years = sorted(shares_copy["year"].unique())
+    data = [shares_copy[shares_copy.year == y]["share_sum"].dropna().values for y in years]
+    fig, ax = plt.subplots(figsize=(10, 5))
+    bp = ax.boxplot(data, positions=range(len(years)), widths=0.5, patch_artist=True,
+                    showfliers=False)
+    for patch in bp["boxes"]:
+        patch.set_facecolor("steelblue")
+        patch.set_alpha(0.6)
+    ax.axhline(1.0, color="tomato", linewidth=1.2, linestyle="--", label="Expected = 1.0")
+    ax.set_xticks(range(len(years)))
+    ax.set_xticklabels([_fy(y) for y in years], rotation=30, ha="right")
+    ax.set_ylabel("Sum of 12 COICOP shares (Laspeyres basis)")
+    ax.set_title("Expenditure Share Sum Validation by Year\n"
+                 "(each household's 12 shares should sum to ≈1.0)")
+    ax.legend()
+    ax.yaxis.grid(True, linestyle="--", alpha=0.4)
+    fig.tight_layout()
+    _save(fig, "p1_share_sum_validation.png", _P1)
+
+
+def p2_dimension_gap_comparison(infl: pd.DataFrame) -> None:
+    """Horizontal bar: inflation gap by household dimension in FY2022."""
+    print("\n[P2] Inflation gap by dimension (FY2022)")
+    crisis_yr = CRISIS_YEARS[0]
+    gaps = {}
+    for arch in infl["archetype_name"].unique():
+        sub = infl[(infl.archetype_name == arch) & (infl.year == crisis_yr)]
+        if sub.empty:
+            continue
+        # For tenure, exclude rent_free
+        if arch == "tenure_type":
+            sub = sub[sub.archetype_value.isin(TENURE_4)]
+        gap = sub["inflation_rate"].max() - sub["inflation_rate"].min()
+        gaps[ARCHETYPE_TITLES.get(arch, arch)] = gap
+    if not gaps:
+        return
+    labels = sorted(gaps, key=gaps.get)
+    values = [gaps[l] for l in labels]
+    colours = ["tomato" if l == "Tenure Type" else "steelblue" for l in labels]
+    fig, ax = plt.subplots(figsize=(8, 5))
+    ax.barh(labels, values, color=colours, height=0.6)
+    for i, (l, v) in enumerate(zip(labels, values)):
+        ax.text(v + 0.02, i, f"{v:.2f}pp", va="center", fontsize=8)
+    ax.set_xlabel(f"Max inflation gap within dimension (pp) — FY{_fy(crisis_yr)}")
+    ax.set_title(f"Why Tenure? Inflation Gap by Household Dimension ({_fy(crisis_yr)})\n"
+                 "(tenure type generates the largest differential)")
+    ax.xaxis.grid(True, linestyle="--", alpha=0.4)
+    fig.tight_layout()
+    _save(fig, "p2_dimension_gap_comparison.png", _P2)
+
+
+def p4_tenure_summary_table(infl: pd.DataFrame, headline: pd.Series) -> None:
+    """Save a CSV table of annual inflation rates by tenure group + CPIH headline."""
+    print("\n[P4] Tenure summary table (CSV)")
+    sub = infl[(infl.archetype_name == "tenure_type") &
+               (infl.archetype_value.isin(TENURE_4))]
+    pivot = sub.pivot(index="year", columns="archetype_value",
+                      values="inflation_rate").reindex(columns=TENURE_4)
+    pivot.columns = [_label("tenure_type", c) for c in pivot.columns]
+    pivot["CPIH Headline"] = headline.reindex(pivot.index)
+    pivot.index = [_fy(y) for y in pivot.index]
+    pivot = pivot.round(2)
+    path = _P4 / "p4_tenure_summary_table.csv"
+    pivot.to_csv(path)
+    print(f"  Saved: {path.relative_to(CHARTS)}")
+
+
+def p4_shifting_burden(infl: pd.DataFrame) -> None:
+    """Heatmap showing inflation rates by tenure × year, with max highlighted."""
+    print("\n[P4] Shifting burden heatmap")
+    sub = infl[(infl.archetype_name == "tenure_type") &
+               (infl.archetype_value.isin(TENURE_4))]
+    pivot = sub.pivot(index="archetype_value", columns="year",
+                      values="inflation_rate").reindex(TENURE_4)
+    pivot.index = [_label("tenure_type", t) for t in pivot.index]
+    pivot.columns = [_fy(y) for y in pivot.columns]
+
+    fig, ax = plt.subplots(figsize=(12, 4))
+    im = ax.imshow(pivot.values, cmap="YlOrRd", aspect="auto")
+    # Annotate each cell; bold the max per column
+    for j in range(pivot.shape[1]):
+        col_vals = pivot.iloc[:, j]
+        max_idx = col_vals.values.argmax()
+        for i in range(pivot.shape[0]):
+            val = pivot.iloc[i, j]
+            weight = "bold" if i == max_idx else "normal"
+            colour = "white" if val > pivot.values.max() * 0.7 else "black"
+            ax.text(j, i, f"{val:.1f}%", ha="center", va="center",
+                    fontsize=8, fontweight=weight, color=colour)
+    ax.set_xticks(range(pivot.shape[1]))
+    ax.set_xticklabels(pivot.columns, rotation=30, ha="right")
+    ax.set_yticks(range(pivot.shape[0]))
+    ax.set_yticklabels(pivot.index)
+    ax.set_title("The Shifting Burden: Annual Inflation Rate by Tenure Group\n"
+                 "(bold = highest-inflation group that year)")
+    fig.colorbar(im, ax=ax, label="Inflation rate (%)", shrink=0.8)
+    fig.tight_layout()
+    _save(fig, "p4_shifting_burden.png", _P4)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PHASE 6 — Clustering (Strand 2)
+# ═══════════════════════════════════════════════════════════════════════════
+
+def _silhouette_scores(X: np.ndarray, k_range: range) -> dict:
+    """Compute silhouette score for each k in k_range using simple K-means."""
+    from sklearn.cluster import KMeans
+    from sklearn.metrics import silhouette_score
+    scores = {}
+    for k in k_range:
+        km = KMeans(n_clusters=k, n_init=10, random_state=42)
+        labels = km.fit_predict(X)
+        scores[k] = silhouette_score(X, labels, sample_size=min(5000, len(X)),
+                                     random_state=42)
+    return scores
+
+
+def p6_clustering(shares: pd.DataFrame) -> None:
+    """Strand 2: K-means clustering on COICOP expenditure share vectors."""
+    print("\n── Phase 6: Clustering (Strand 2) ──")
+    try:
+        from sklearn.cluster import KMeans
+        from sklearn.metrics import silhouette_score
+        from sklearn.decomposition import PCA
+    except ImportError:
+        print("  sklearn not available — skipping clustering phase.")
+        return
+
+    share_cols = [
+        "share_01_food_non_alcoholic", "share_02_alcohol_tobacco",
+        "share_03_clothing_footwear", "share_04_actual_rent",
+        "share_04_energy_other", "share_05_furnishings", "share_06_health",
+        "share_07_transport", "share_08_communication",
+        "share_09_recreation_culture", "share_10_education",
+        "share_11_restaurants_hotels", "share_12_misc_goods_services",
+    ]
+    avail = [c for c in share_cols if c in shares.columns]
+    if len(avail) < 10:
+        print("  Not enough share columns, skipping.")
+        return
+
+    sub = shares[shares["tenure_type"].isin(TENURE_4)].dropna(subset=avail).copy()
+    X = sub[avail].values
+    tenure_labels = sub["tenure_type"].values
+
+    # --- Silhouette analysis ---
+    print("\n[P6] Silhouette analysis")
+    k_range = range(2, 9)
+    scores = _silhouette_scores(X, k_range)
+    best_k = max(scores, key=scores.get)
+    print(f"  Best k = {best_k} (silhouette = {scores[best_k]:.3f})")
+
+    fig, ax = plt.subplots(figsize=(7, 4))
+    ax.plot(list(scores.keys()), list(scores.values()), marker="o",
+            color="steelblue", linewidth=2)
+    ax.axvline(best_k, color="tomato", linestyle="--", label=f"Best k = {best_k}")
+    ax.set_xlabel("Number of clusters (k)")
+    ax.set_ylabel("Silhouette score")
+    ax.set_title("Silhouette Analysis for K-Means on COICOP Shares")
+    ax.legend()
+    ax.yaxis.grid(True, linestyle="--", alpha=0.4)
+    fig.tight_layout()
+    _save(fig, "p6_silhouette_analysis.png", _P6)
+
+    # --- Fit final model ---
+    km = KMeans(n_clusters=best_k, n_init=20, random_state=42)
+    cluster_labels = km.fit_predict(X)
+
+    # --- Cluster profile heatmap ---
+    print(f"\n[P6] Cluster profiles (k={best_k})")
+    profile_df = pd.DataFrame(X, columns=avail)
+    profile_df["cluster"] = cluster_labels
+    means = profile_df.groupby("cluster")[avail].mean()
+    short_names = []
+    coicop_short_map = {
+        "share_01_food_non_alcoholic": "Food",
+        "share_02_alcohol_tobacco": "Alcohol",
+        "share_03_clothing_footwear": "Clothing",
+        "share_04_actual_rent": "Rent",
+        "share_04_energy_other": "Energy/Hsg",
+        "share_05_furnishings": "Furnishings",
+        "share_06_health": "Health",
+        "share_07_transport": "Transport",
+        "share_08_communication": "Comms",
+        "share_09_recreation_culture": "Recreation",
+        "share_10_education": "Education",
+        "share_11_restaurants_hotels": "Restaurants",
+        "share_12_misc_goods_services": "Misc",
+    }
+    short_names = [coicop_short_map.get(c, c) for c in avail]
+
+    fig, ax = plt.subplots(figsize=(12, max(3, best_k * 0.8)))
+    im = ax.imshow(means.values, cmap="YlOrRd", aspect="auto")
+    for i in range(means.shape[0]):
+        for j in range(means.shape[1]):
+            ax.text(j, i, f"{means.iloc[i, j]:.2f}", ha="center", va="center",
+                    fontsize=7, color="black")
+    ax.set_xticks(range(len(short_names)))
+    ax.set_xticklabels(short_names, rotation=45, ha="right", fontsize=8)
+    ax.set_yticks(range(best_k))
+    ax.set_yticklabels([f"Cluster {i}" for i in range(best_k)])
+    ax.set_title(f"K-Means Cluster Profiles (k={best_k}): Mean COICOP Shares\n"
+                 "(each row is a data-driven household expenditure archetype)")
+    fig.colorbar(im, ax=ax, label="Mean share", shrink=0.8)
+    fig.tight_layout()
+    _save(fig, "p6_cluster_profiles.png", _P6)
+
+    # --- Cluster × tenure cross-tab ---
+    print(f"\n[P6] Cluster × tenure cross-tabulation")
+    ct = pd.crosstab(cluster_labels, tenure_labels, normalize="index") * 100
+    ct = ct.reindex(columns=TENURE_4)
+    ct.columns = [_label("tenure_type", c) for c in ct.columns]
+    ct.index = [f"Cluster {i}" for i in ct.index]
+
+    fig, ax = plt.subplots(figsize=(8, max(3, best_k * 0.7)))
+    im = ax.imshow(ct.values, cmap="Blues", aspect="auto", vmin=0, vmax=100)
+    for i in range(ct.shape[0]):
+        for j in range(ct.shape[1]):
+            ax.text(j, i, f"{ct.iloc[i, j]:.0f}%", ha="center", va="center",
+                    fontsize=9, fontweight="bold" if ct.iloc[i, j] > 40 else "normal")
+    ax.set_xticks(range(ct.shape[1]))
+    ax.set_xticklabels(ct.columns, fontsize=9)
+    ax.set_yticks(range(ct.shape[0]))
+    ax.set_yticklabels(ct.index)
+    ax.set_title("Cluster Composition by Tenure Group\n"
+                 "(do data-driven clusters align with tenure categories?)")
+    fig.colorbar(im, ax=ax, label="% of cluster", shrink=0.8)
+    fig.tight_layout()
+    _save(fig, "p6_cluster_tenure_crosstab.png", _P6)
+
+    # Save cross-tab as CSV too
+    ct_path = _P6 / "p6_cluster_tenure_crosstab.csv"
+    ct.to_csv(ct_path)
+    print(f"  Saved: {ct_path.relative_to(CHARTS)}")
+
+    # --- PCA scatter ---
+    print(f"\n[P6] PCA scatter (2D) coloured by cluster")
+    pca = PCA(n_components=2, random_state=42)
+    X2 = pca.fit_transform(X)
+    # Subsample for readable plot
+    rng = np.random.RandomState(42)
+    n_plot = min(4000, len(X2))
+    idx = rng.choice(len(X2), n_plot, replace=False)
+
+    markers = {"social_rent": "o", "private_rent": "s",
+               "own_outright": "^", "own_mortgage": "D"}
+    fig, ax = plt.subplots(figsize=(9, 7))
+    for ci in range(best_k):
+        for t in TENURE_4:
+            mask = (cluster_labels[idx] == ci) & (tenure_labels[idx] == t)
+            if mask.sum() == 0:
+                continue
+            ax.scatter(X2[idx][mask, 0], X2[idx][mask, 1],
+                       c=[_colour(ci, best_k)], marker=markers[t],
+                       s=12, alpha=0.35, linewidths=0)
+    # Legends
+    cluster_handles = [plt.Line2D([0], [0], marker="o", color="w",
+                       markerfacecolor=_colour(ci, best_k), markersize=8,
+                       label=f"Cluster {ci}") for ci in range(best_k)]
+    tenure_handles = [plt.Line2D([0], [0], marker=markers[t], color="grey",
+                      markersize=8, linestyle="None",
+                      label=_label("tenure_type", t)) for t in TENURE_4]
+    ax.legend(handles=cluster_handles + tenure_handles,
+              bbox_to_anchor=(1.01, 1), loc="upper left", fontsize=7)
+    ax.set_xlabel(f"PC1 ({pca.explained_variance_ratio_[0]:.1%} variance)")
+    ax.set_ylabel(f"PC2 ({pca.explained_variance_ratio_[1]:.1%} variance)")
+    ax.set_title(f"PCA of COICOP Expenditure Shares (n={n_plot:,})\n"
+                 "Colour = K-means cluster, Shape = tenure group")
+    fig.tight_layout()
+    _save(fig, "p6_cluster_pca.png", _P6)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # MAIN
 # ═══════════════════════════════════════════════════════════════════════════
 
 def main() -> None:
     print("=" * 60)
-    print("Five-Phase Inflation Visualisation Pipeline")
+    print("Six-Phase Inflation Visualisation Pipeline")
     print("=" * 60)
     print(f"  Output directory: {CHARTS}")
     try:
@@ -866,6 +1193,8 @@ def main() -> None:
     p1_sample_size(shares)
     p1_cell_sizes(shares)
     p1_weight_distribution(shares)
+    p1_sample_by_tenure(shares)
+    p1_share_sum_validation(shares)
 
     print("\n── Phase 2: Expenditure Heterogeneity ──")
     p2_basket_by_quintile(shares)
@@ -873,6 +1202,7 @@ def main() -> None:
     p2_food_energy_density(shares)
     p2_basket_shift(shares)
     p2_share_correlation(shares)
+    p2_dimension_gap_comparison(infl)
 
     print("\n── Phase 3: Price Environment ──")
     p3_monthly_index(monthly)
@@ -882,12 +1212,17 @@ def main() -> None:
     print("\n── Phase 4: Group-Specific Inflation ──")
     p4_all_group_series(infl, headline)
     p4_main_body_extras(infl, decomp, headline)
+    p4_tenure_summary_table(infl, headline)
+    p4_shifting_burden(infl)
 
     print("\n── Phase 5: HCI Validation ──")
-    p5_income_comparison(infl, hci, headline)
     p5_tenure_comparison(infl, hci, headline)
+    p5_income_comparison(infl, hci, headline)
     p5_pensioner_comparison(infl, hci, headline)
     p5_residual_scatter(infl, hci)
+
+    print("\n── Phase 6: Clustering (Strand 2) ──")
+    p6_clustering(shares)
 
     saved = sorted(CHARTS.rglob("*.png"))
     print(f"\nDone. {len(saved)} charts saved to {CHARTS}")

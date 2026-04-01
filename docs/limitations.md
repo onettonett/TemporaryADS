@@ -4,7 +4,7 @@
 
 - **Income quintiles are now weighted**: `income_quintile` is computed using `weighta` (survey grossing weights) and `eqincdmp` (equivalised income, modified OECD scale) within each year. This produces population-representative quintiles that adjust for household size and composition.
 
-- **Expenditure cleaning now applied**: negative total expenditures are set to NaN, negative division totals are set to NaN, and shares are Winsorised at [1st, 99th] percentiles within each year to address diary artefacts.
+- **Expenditure cleaning now applied**: negative total expenditures are set to NaN, negative division totals are set to NaN. Implausible households are removed via domain-based filters (zero food, zero housing, negative total expenditure — 350 records, 0.76%) rather than per-column winsorisation, which would break the compositional sum-to-1 constraint of expenditure shares.
 
 - **Denominator consistency validated**: the pipeline checks whether `p630tp` agrees with the sum of division totals (`p601t`-`p612t`) and uses the division sum when they diverge by >1%, ensuring share numerators and denominator are internally consistent.
 
@@ -22,7 +22,7 @@
 
 - **Share sums not exactly 1.0**: mean share sum is ~0.992 because the division sum denominator may exclude very small COICOP items not captured in `p601t`-`p612t`. This is a minor issue (< 1% deviation on average).
 
-- **Winsorisation is within-year only**: percentile bounds are computed separately per year. If a genuine structural shift occurs (e.g., energy crisis 2022), the bounds will adapt, which is desirable but means extreme values in crisis years may be less aggressively clipped.
+- **No per-column outlier treatment**: we deliberately chose not to winsorise or IQR-clip individual expenditure shares. For zero-inflated categories (Education 95.5% zeros, Rent 76%), IQR collapses and flags legitimate subpopulations as outliers. Genuine extreme spenders (e.g., housing-poor renters at 80%+ housing share) are retained, as their inflation experience is central to the research question. Group averaging over 500+ households per cell provides natural robustness.
 
 - **Rent-free tenure has small cell sizes**: only ~50 households per year, below the 100-observation minimum for reliable group estimates. Consider merging with another tenure category or dropping from analysis.
 
