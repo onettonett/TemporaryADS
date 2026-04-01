@@ -117,15 +117,6 @@ COICOP_DIVISION_LABELS = {
     "p612t": "12_misc_goods_services",
 }
 
-# COICOP class-level columns (ck*t) - more granular, for matching CPIH
-# sub-indices.  These 24 columns are common across all 9 years.
-CK_COLS = [
-    "ck1211t", "ck1313t", "ck1314t", "ck1315t", "ck1316t", "ck1411t",
-    "ck2111t", "ck3111t", "ck3112t", "ck4111t", "ck4112t", "ck5111t",
-    "ck5113t", "ck5115t", "ck5116t", "ck5212t", "ck5213t", "ck5214t",
-    "ck5215t", "ck5216t", "ck5221t", "ck5222t", "ck5223t", "ck5316t",
-]
-
 # Household demographic/classification variables (dvhh)
 
 DVHH_SOURCE_COLS = [
@@ -315,7 +306,7 @@ def extract_dvhh(year: int) -> pd.DataFrame:
     path = LCF_DVHH[year]
     df = load_stata(path)
 
-    wanted = DVHH_SOURCE_COLS + COICOP_DIVISION_COLS + CK_COLS
+    wanted = DVHH_SOURCE_COLS + COICOP_DIVISION_COLS
 
     # Keeps only the wanted columns that are in that year's file. 
     keep = _safe_cols(df, wanted)

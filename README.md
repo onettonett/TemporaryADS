@@ -1,64 +1,51 @@
-# One Size Fits None — UK Differential Inflation (2015–2023)
+# One Size Fits None — UK Differential Inflation (2015-2023)
 
-Construct group-specific inflation series using **LCF microdata** expenditure weights and **ONS MM23 CPIH** item-level indices under a **Laspeyres** framework (lagged weights).
+Construct group-specific inflation series using **LCF microdata** expenditure weights and **ONS MM23 CPIH** item-level indices under a **Laspeyres** framework (lagged weights). Validated against ONS **Household Costs Indices (HCI)**.
 
-## Repository layout (high level)
-- `src/`: pipeline scripts
-- `data/`: inputs/outputs (raw data not included in this repo)
-- `plots/`: generated figures
-- `docs/`: methodology and limitations notes
+## Repository layout
+- `src/` -- pipeline scripts (see below)
+- `data/raw/` -- raw LCF, MM23, HCI files (not included in repo)
+- `data/interim/` -- intermediate extracted parquets
+- `data/processed/` -- analysis-ready parquets + charts + report figures
+- `docs/` -- methodology and limitations notes
 
-## Quick start (recommended)
-Run the full pipeline:
+## Pipeline scripts
+
+| Script | Purpose |
+|---|---|
+| `wrangle_lcf.py` | Clean LCF, compute COICOP expenditure shares, build 8 archetype flags |
+| `wrangle_mm23.py` | Extract CPIH monthly indices from MM23 |
+| `wrangle_hci.py` | Extract ONS HCI validation benchmarks |
+| `compute_group_inflation.py` | Laspeyres: combine LCF shares with CPIH price changes |
+| `visualise_inflation.py` | 6-phase exploratory charts (sample, baskets, prices, inflation, HCI validation, clustering) |
+| `generate_report_figures.py` | Publication-quality figures for IEEE report |
+| `run_pipeline.py` | Runs all wrangling + inflation computation in sequence |
+
+## Quick start
 
 ```bash
 bash QUICK_START.sh
 ```
 
-## Environment setup (pick one)
-
-### Option A: Conda (best if you already use Anaconda)
+## Environment setup
 
 ```bash
 conda env create -f environment.yml
-conda activate ads
-python -V
+conda activate ads_easter
 ```
 
-### Option B: venv + pip (works everywhere)
+Or with pip:
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install --upgrade pip
 pip install -r requirements.txt
-python -V
 ```
 
 ## Running scripts manually
 
 ```bash
-python src/run_pipeline.py       # wrangle LCF, MM23, HCI → parquets
-python src/visualise_inflation.py  # five-phase visualisation → 32 charts
-```
-
-## Outputs
-- Core results (parquet): `data/processed/`
-  - `group_inflation_rates.parquet`
-  - `inflation_decomposition.parquet`
-  - `archetype_inflation_summary.parquet`
-- Figures (PNG): `data/processed/charts/`
-
-## Notes on key group definitions
-See `docs/methodology.md` and `docs/limitations.md` for details (e.g., `is_pensioner` and benefit-based `is_disability` / `is_carer` flags).
-
-# Instructions on Running this ADS Project
-
-- This project uses Anaconda (which you can install from here if you don't have it alreaday: https://www.anaconda.com/download)
-
-### Environment setup
-```bash
-conda env create -f environment.yml
-conda activate ads
-python -V
+python src/run_pipeline.py            # wrangle all data + compute inflation
+python src/visualise_inflation.py     # exploratory charts -> data/processed/charts/
+python src/generate_report_figures.py # report figures -> data/processed/report_figures/
 ```
