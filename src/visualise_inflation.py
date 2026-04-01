@@ -9,7 +9,9 @@ Five-phase visualisation strategy for the inflation heterogeneity project.
   Phase 4 – Group-Specific Inflation
   Phase 5 – Validation Against HCI
 
-All charts saved as PNG at 150 dpi to data/processed/charts/.
+Charts saved as PNG at 150 dpi into phase subfolders under data/processed/charts/:
+  01_data_quality/ · 02_expenditure_patterns/ · 03_price_environment/
+  04_group_inflation/ · 05_hci_validation/
 """
 
 from __future__ import annotations
@@ -29,6 +31,15 @@ ROOT      = pathlib.Path(__file__).resolve().parents[1]
 PROCESSED = ROOT / "data" / "processed"
 CHARTS    = PROCESSED / "charts"
 CHARTS.mkdir(parents=True, exist_ok=True)
+
+# One subfolder per narrative phase
+_P1 = CHARTS / "01_data_quality"
+_P2 = CHARTS / "02_expenditure_patterns"
+_P3 = CHARTS / "03_price_environment"
+_P4 = CHARTS / "04_group_inflation"
+_P5 = CHARTS / "05_hci_validation"
+for _d in (_P1, _P2, _P3, _P4, _P5):
+    _d.mkdir(parents=True, exist_ok=True)
 
 plt.rcParams.update({"axes.spines.top": False, "axes.spines.right": False})
 
@@ -115,11 +126,11 @@ def _fy(yr: int) -> str:
     return f"{yr}/{str(yr + 1)[-2:]}"
 
 
-def _save(fig: plt.Figure, name: str) -> None:
-    path = CHARTS / name
+def _save(fig: plt.Figure, name: str, subdir: pathlib.Path = CHARTS) -> None:
+    path = subdir / name
     fig.savefig(path, dpi=150, bbox_inches="tight")
     plt.close(fig)
-    print(f"  Saved: {name}")
+    print(f"  Saved: {path.relative_to(CHARTS)}")
 
 
 def _wmean(df: pd.DataFrame, cols: list, w_col: str | None) -> dict:
@@ -243,7 +254,7 @@ def p1_sample_size(shares: pd.DataFrame) -> None:
     ax.set_xticklabels([_fy(y) for y in years], rotation=30, ha="right")
     ax.yaxis.grid(True, linestyle="--", alpha=0.5)
     fig.tight_layout()
-    _save(fig, "p1_1_sample_size.png")
+    _save(fig, "p1_1_sample_size.png", _P1)
 
 
 def p1_cell_sizes(shares: pd.DataFrame) -> None:
@@ -273,7 +284,7 @@ def p1_cell_sizes(shares: pd.DataFrame) -> None:
     ax.set_title("LCF Cell Sizes by Archetype Group and Year\n(white = below 80 households)")
     fig.colorbar(im, ax=ax, label="Household count")
     fig.tight_layout()
-    _save(fig, "p1_2_cell_sizes.png")
+    _save(fig, "p1_2_cell_sizes.png", _P1)
 
 
 def p1_weight_distribution(shares: pd.DataFrame) -> None:
@@ -295,7 +306,7 @@ def p1_weight_distribution(shares: pd.DataFrame) -> None:
     ax.set_title("Household Weight Distribution by Financial Year")
     ax.yaxis.grid(True, linestyle="--", alpha=0.5)
     fig.tight_layout()
-    _save(fig, "p1_3_weight_distribution.png")
+    _save(fig, "p1_3_weight_distribution.png", _P1)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -332,7 +343,7 @@ def p2_basket_by_quintile(shares: pd.DataFrame) -> None:
     ax.set_title("Mean Basket Composition by Income Quintile\n(Weighted expenditure shares, all years pooled)")
     ax.set_xlabel("Income quintile")
     fig.tight_layout()
-    _save(fig, "p2_4_basket_income_quintile.png")
+    _save(fig, "p2_4_basket_income_quintile.png", _P2)
 
 
 def p2_basket_by_tenure(shares: pd.DataFrame) -> None:
@@ -351,7 +362,7 @@ def p2_basket_by_tenure(shares: pd.DataFrame) -> None:
     ax.set_title("Mean Basket Composition by Tenure Type\n(Weighted expenditure shares, all years pooled)")
     ax.set_xlabel("Tenure type")
     fig.tight_layout()
-    _save(fig, "p2_5_basket_tenure.png")
+    _save(fig, "p2_5_basket_tenure.png", _P2)
 
 
 def p2_food_energy_density(shares: pd.DataFrame) -> None:
@@ -382,7 +393,7 @@ def p2_food_energy_density(shares: pd.DataFrame) -> None:
     ax.legend(title="Quintile")
     ax.yaxis.grid(True, linestyle="--", alpha=0.4)
     fig.tight_layout()
-    _save(fig, "p2_6_food_energy_density.png")
+    _save(fig, "p2_6_food_energy_density.png", _P2)
 
 
 def p2_basket_shift(shares: pd.DataFrame) -> None:
@@ -425,7 +436,7 @@ def p2_basket_shift(shares: pd.DataFrame) -> None:
     fig.legend(handles=handles, title="Quintile", loc="lower right", fontsize=8)
     fig.suptitle("Basket Shift Over Time: Q1 vs Q5 by COICOP Division (2015–2023)", y=1.01)
     fig.tight_layout()
-    _save(fig, "p2_7_basket_shift.png")
+    _save(fig, "p2_7_basket_shift.png", _P2)
 
 
 def p2_share_correlation(shares: pd.DataFrame) -> None:
@@ -446,7 +457,7 @@ def p2_share_correlation(shares: pd.DataFrame) -> None:
     ax.set_title("Pairwise Correlation of COICOP Expenditure Shares\n(All households, 2015–2023)")
     fig.colorbar(im, ax=ax, label="Pearson r")
     fig.tight_layout()
-    _save(fig, "p2_8_share_correlation.png")
+    _save(fig, "p2_8_share_correlation.png", _P2)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -482,7 +493,7 @@ def p3_monthly_index(monthly: pd.DataFrame) -> None:
     ax.set_title("CPIH Sub-Index Monthly Series (Jan 2015 = 100)\nFood & energy highlighted; other categories in grey")
     ax.yaxis.grid(True, linestyle="--", alpha=0.4)
     fig.tight_layout()
-    _save(fig, "p3_9_monthly_index.png")
+    _save(fig, "p3_9_monthly_index.png", _P3)
 
 
 def p3_annual_price_change(fy_idx: pd.DataFrame) -> None:
@@ -507,7 +518,7 @@ def p3_annual_price_change(fy_idx: pd.DataFrame) -> None:
     ax.yaxis.grid(True, linestyle="--", alpha=0.4)
     ax.legend(bbox_to_anchor=(1.01, 1), loc="upper left", fontsize=7)
     fig.tight_layout()
-    _save(fig, "p3_10_annual_price_change.png")
+    _save(fig, "p3_10_annual_price_change.png", _P3)
 
 
 def p3_volatility_ranking(fy_idx: pd.DataFrame) -> None:
@@ -523,7 +534,7 @@ def p3_volatility_ranking(fy_idx: pd.DataFrame) -> None:
     ax.set_title("CPIH Sub-Index Price Volatility\n(Standard deviation of annual price changes; red = above median)")
     ax.xaxis.grid(True, linestyle="--", alpha=0.5)
     fig.tight_layout()
-    _save(fig, "p3_11_volatility_ranking.png")
+    _save(fig, "p3_11_volatility_ranking.png", _P3)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -556,7 +567,7 @@ def p4_all_group_series(infl: pd.DataFrame, headline: pd.Series) -> None:
         ax.set_xticklabels([_fy(y) for y in years], rotation=30, ha="right")
         ax.legend(bbox_to_anchor=(1.01, 1), loc="upper left", fontsize=8)
         fig.tight_layout()
-        _save(fig, f"p4_series_{arch}.png")
+        _save(fig, f"p4_series_{arch}.png", _P4)
 
 
 def _gap_bar(infl: pd.DataFrame, headline: pd.Series, arch: str,
@@ -579,7 +590,7 @@ def _gap_bar(infl: pd.DataFrame, headline: pd.Series, arch: str,
                  f"(red = {_label(arch, hi_grp)} pays more; shaded = crisis period)")
     ax.yaxis.grid(True, linestyle="--", alpha=0.5)
     fig.tight_layout()
-    _save(fig, f"p4_gap_{arch}.png")
+    _save(fig, f"p4_gap_{arch}.png", _P4)
 
 
 def _crisis_decomp(decomp: pd.DataFrame, arch: str, groups: list) -> None:
@@ -610,7 +621,7 @@ def _crisis_decomp(decomp: pd.DataFrame, arch: str, groups: list) -> None:
                  f"{ARCHETYPE_TITLES.get(arch, arch)}")
     ax.legend(bbox_to_anchor=(1.01, 1), loc="upper left", fontsize=7)
     fig.tight_layout()
-    _save(fig, f"p4_decomp_{arch}.png")
+    _save(fig, f"p4_decomp_{arch}.png", _P4)
 
 
 def _cumulative_ppp(infl: pd.DataFrame, headline: pd.Series, arch: str) -> None:
@@ -640,7 +651,7 @@ def _cumulative_ppp(infl: pd.DataFrame, headline: pd.Series, arch: str) -> None:
     ax.yaxis.grid(True, linestyle="--", alpha=0.5)
     ax.legend(bbox_to_anchor=(1.01, 1), loc="upper left", fontsize=8)
     fig.tight_layout()
-    _save(fig, f"p4_cumulative_{arch}.png")
+    _save(fig, f"p4_cumulative_{arch}.png", _P4)
 
 
 def _select_main_archetypes(infl: pd.DataFrame) -> list:
@@ -740,7 +751,7 @@ def p5_income_comparison(infl: pd.DataFrame, hci: pd.DataFrame,
     ax.set_title("Validation — Income: My Q1/Q5 vs HCI Decile 1/10\n"
                  "(solid = my estimates, dashed = HCI, dotted = CPIH headline)")
     fig.tight_layout()
-    _save(fig, "p5_19_income_comparison.png")
+    _save(fig, "p5_19_income_comparison.png", _P5)
 
 
 def p5_tenure_comparison(infl: pd.DataFrame, hci: pd.DataFrame,
@@ -759,7 +770,7 @@ def p5_tenure_comparison(infl: pd.DataFrame, hci: pd.DataFrame,
     ax.set_title("Validation — Tenure: My Estimates vs HCI\n"
                  "(solid = my estimates, dashed = HCI, dotted = CPIH headline)")
     fig.tight_layout()
-    _save(fig, "p5_20_tenure_comparison.png")
+    _save(fig, "p5_20_tenure_comparison.png", _P5)
 
 
 def p5_pensioner_comparison(infl: pd.DataFrame, hci: pd.DataFrame,
@@ -777,7 +788,7 @@ def p5_pensioner_comparison(infl: pd.DataFrame, hci: pd.DataFrame,
     ax.set_title("Validation — Pensioner Status: My Estimates vs HCI Retired/Non-Retired\n"
                  "(solid = my estimates, dashed = HCI, dotted = CPIH headline)")
     fig.tight_layout()
-    _save(fig, "p5_21_pensioner_comparison.png")
+    _save(fig, "p5_21_pensioner_comparison.png", _P5)
 
 
 def p5_residual_scatter(infl: pd.DataFrame, hci: pd.DataFrame) -> None:
@@ -829,7 +840,7 @@ def p5_residual_scatter(infl: pd.DataFrame, hci: pd.DataFrame) -> None:
     ax.set_aspect("equal")
     ax.legend(fontsize=7, bbox_to_anchor=(1.01, 1), loc="upper left")
     fig.tight_layout()
-    _save(fig, "p5_22_residual_scatter.png")
+    _save(fig, "p5_22_residual_scatter.png", _P5)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -878,7 +889,7 @@ def main() -> None:
     p5_pensioner_comparison(infl, hci, headline)
     p5_residual_scatter(infl, hci)
 
-    saved = sorted(CHARTS.glob("*.png"))
+    saved = sorted(CHARTS.rglob("*.png"))
     print(f"\nDone. {len(saved)} charts saved to {CHARTS}")
 
 
