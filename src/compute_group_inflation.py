@@ -228,9 +228,13 @@ def main() -> None:
         raise RuntimeError("No decomposition data produced.")
     decomposition["archetype_value"] = decomposition["archetype_value"].astype(str)
 
-    # Sum contributions to get inflation rate
+    # Extract inflation rate from the pre-computed "all_items" total row.
+    # Do NOT sum all rows — individual category contributions are also stored
+    # in the decomposition for chart use; summing them together with "all_items"
+    # would double-count every rate.
     infl = (
-        decomposition.groupby(["archetype_name", "archetype_value", "year"])["contribution"]
+        decomposition[decomposition["coicop_label"] == "all_items"]
+        .groupby(["archetype_name", "archetype_value", "year"])["contribution"]
         .sum()
         .reset_index()
         .rename(columns={"contribution": "inflation_rate"})
