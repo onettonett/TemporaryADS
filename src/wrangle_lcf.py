@@ -123,77 +123,25 @@ DVHH_SOURCE_COLS = [
     "case",         # household case ID
     "weighta",      # annual grossing weight
 
-    # Household composition
     "a049",         # household size (total persons)
-    "a062",         # family type (detailed: 1 man, 1 woman, couples+children etc.)
-    "a121",         # tenure type 1 = { {1,2}, {3,4}, {5}, {6,7}, {8} } = {social rent, private rent, own outright, own mortgage, rent free}
-    "a122",         # tenure type 2 (more detailed but I don't think we'll be using this extra detail)
-    "gorx",         # Government Office Region (1-12)
-
-    # Counts of individuals in each age band (in the household).
-    # Age bands are {<2, 2-5, 5-18, 18-45, 45-60, 60-65, 65-70, 70+}.
-    # Sum of the counts in each age band {a040, a041, a042, a043, a044, a045, a046, a047} should equal a049.
-    "a040",         # number of children under 2
-    "a041",         # number of children aged 2 to under 5
-    "a042",         # number of children aged 5 to under 18
-    "a043",         # number of adults aged 18 to under 45
-    "a044",         # number of adults aged 45 to under 60
-    "a045",         # number of adults aged 60 to under 65
-    "a046",         # number of adults aged 65 to under 70
-    "a047",         # number of adults aged 70 and over
-
-    "a054",         # number of workers in household
-
-    # HRP stands for household reference person (it's the person chosen to represent the household).
-    # To me, designing the groups using the HRP rather than checking every individual in the household feels lazy but perhaps it works for some grouping?
-
-    "sexhrp",       # sex of HRP (from dvhh directly)
-    "a065p",        # (coded) age band of HRP
-    "a071",         # NS-SEC of HRP (NS-SEC stands for National Statistics Socio-Economics Classification)
+    "a121",         # tenure type 1 (social/private rent, own outright/mortgage)
 
     # Income / housing
-    "p389p",        # gross normal weekly household income
-    "eqincdmp",     # equivalised income (modified OECD scale)
-    "hh_total_coicop_expenditure",       # total COICOP expenditure
-    "b010",         # rent (gross)
-    "b020",         # mortgage payments
+    "p389p",        # gross normal weekly household income (fallback for quintiles)
+    "eqincdmp",     # equivalised income (modified OECD scale, primary for quintiles)
+    "hh_total_coicop_expenditure",  # total COICOP expenditure
+    "b010",         # rent (gross) — needed for COICOP 04 rent/energy decomposition
 ]
 
 DVHH_READABLE_NAMES = {
-
-    # Keys / weights
     "case": "household_id",
     "weighta": "household_weight",
-
-    # Household composition
     "a049": "household_size",
-    "a062": "family_type_code",
     "a121": "tenure_type1_code",
-    "a122": "tenure_type2_code",
-    "gorx": "region_code",
-
-    # Age-banded counts
-    "a040": "n_children_under_2",
-    "a041": "n_children_2_to_4",
-    "a042": "n_children_5_to_17",
-    "a043": "n_adults_18_to_44",
-    "a044": "n_adults_45_to_59",
-    "a045": "n_adults_60_to_64",
-    "a046": "n_adults_65_to_69",
-    "a047": "n_adults_70_plus",
-    "a054": "n_workers_in_household",
-
-    # HRP (Household Reference Person)
-    "sexhrp": "hrp_sex_code",
-    "a065p": "hrp_age_band_code",
-    "a071": "hrp_nssec_code",
-
-    # Income / housing
     "p389p": "hh_income_gross_weekly",
     "eqincdmp": "hh_income_equivalised_oecd_mod",
     "hh_total_coicop_expenditure": "hh_total_coicop_expenditure",
     "b010": "rent_gross_weekly",
-    "b020": "mortgage_payments_weekly",
 }
 
 # Person-level variables (dvper)
@@ -201,82 +149,15 @@ DVHH_READABLE_NAMES = {
 DVPER_SOURCE_COLS = [
     "case",         # Household ID (used to link individual's records to household records).
     "person",       # Person number within the household (e.g., person 1, person 2).
-    "a005p",        # Person's age.
+    "a005p",        # Person's age (needed for HRP age band).
     "a006p",        # Person's sex.
-    "a200",         # Number of people in this household (household size).
-
-    # Work / labour-market status
-    "a206",         # Main economic status {1 = self-employed, 2 = full-time employed, 3 = part-time employed, 4 = unemployed, 5 = government training, 6 = retired, 7 = retired/under pension age, 0 = not recorded}.
-    "a015",         # Employment position/status (e.g. working, retired, full-time education, other).
-
-    # Disability-related benefits (weekly GBP amounts = 0 usually means not received)
-    # Basically, DLA was replaced by PIP from 2013 onwards (gradual transition through 2015-2023), so both neccessary because there's variation.
-    "b403",         # Disability Living Allowance (DLA) - care component.
-    "b405",         # Disability Living Allowance (DLA) - mobility component.
-    "b421",         # Attendance Allowance.
-    "b552",         # Personal Independence Payment (PIP) - daily living / care component.
-    "b553",         # Personal Independence Payment (PIP) - mobility component.
-
-    # Carer-related benefit
-    "b343",         # Carer's Allowance (weekly amount).
 ]
 
 DVPER_READABLE_NAMES = {
-    # Keys
     "case": "household_id",
     "person": "person_id",
-    "a200": "household_size_from_person_file",
-
-    # Demographics
     "a005p": "person_age",
     "a006p": "person_sex_code",
-
-    # Economic position
-    "a206": "economic_position_ilo_code",
-    "a015": "employment_position_code",
-
-    # Disability-related benefits (weekly amounts)
-    "b403": "dla_self_care_weekly",
-    "b405": "dla_mobility_weekly",
-    "b421": "attendance_allowance_weekly",
-    "b552": "pip_daily_living_weekly",
-    "b553": "pip_mobility_weekly",
-
-    # Carer status proxy
-    "b343": "carers_allowance_weekly",
-}
-
-# Region labels
-
-REGION_LABELS = {
-    1: "North East",
-    2: "North West",
-    3: "Yorkshire and the Humber",
-    4: "East Midlands",
-    5: "West Midlands",
-    6: "Eastern",
-    7: "London",
-    8: "South East",
-    9: "South West",
-    10: "Wales",
-    11: "Scotland",
-    12: "Northern Ireland",
-}
-
-# When cell sizes are too small, we attempt grouping regions into broader categories.
-REGION_BROAD = {
-    1: "North",                             # North East
-    2: "North",                             # North West
-    3: "North",                             # Yorkshire and the Humber
-    4: "Midlands",                          # East Midlands
-    5: "Midlands",                          # West Midlands
-    6: "South (excluding London)",          # Eastern
-    7: "London",                            # London (kept separate - very economically distinct from the rest of the UK)
-    8: "South (excluding London)",          # South East
-    9: "South (excluding London)",          # South West
-    10: "Wales",                            # Wales
-    11: "Scotland",                         # Scotland
-    12: "Northern Ireland",                 # Northern Ireland
 }
 
 # Minimum cell size for reliable group estimates
@@ -557,92 +438,20 @@ def filter_implausible_households(df: pd.DataFrame) -> pd.DataFrame:
 
 def _aggregate_person_to_household(dvper: pd.DataFrame) -> pd.DataFrame:
     """
-    Aggregate person-level data to household level for disability/carer
-    (care_impacted) and employment composition flags.
+    Extract HRP age from person-level data (person_id == 1).
 
-    Returns one row per (case, year) with:
-    - hrp_age, hrp_sex       : HRP demographics (person == 1)
-    - hrp_econ_pos            : HRP economic position (a206)
-    - hrp_emp_position        : HRP employment position (a015)
-    - care_impacted           : any person has disability benefit or Carer's Allowance
-    - n_working, n_retired,
-      n_unemployed, n_adults_per : counts for employment composition
+    Returns one row per (case, year) with hrp_age.
     """
     per = dvper.copy()
-
-    # HRP demographics: HRP has person_id == 1
     hrp = per[per["person_id"] == 1][["household_id", "year"]].copy()
 
-    # Adds HRP information.
     if "person_age" in per.columns:
-        hrp = hrp.merge(per.loc[per["person_id"] == 1, ["household_id", "year", "person_age"]], on=["household_id", "year"], how="left").rename(columns={"person_age": "hrp_age"})
+        hrp = hrp.merge(
+            per.loc[per["person_id"] == 1, ["household_id", "year", "person_age"]],
+            on=["household_id", "year"], how="left",
+        ).rename(columns={"person_age": "hrp_age"})
 
-    if "person_sex_code" in per.columns:
-        hrp = hrp.merge(per.loc[per["person_id"] == 1, ["household_id", "year", "person_sex_code"]], on=["household_id", "year"], how="left").rename(columns={"person_sex_code": "hrp_sex_code"})
-
-    if "economic_position_ilo_code" in per.columns:
-        hrp = hrp.merge(per.loc[per["person_id"] == 1, ["household_id", "year", "economic_position_ilo_code"]], on=["household_id", "year"], how="left").rename(columns={"economic_position_ilo_code": "hrp_economic_position_ilo_code"})
-
-    if "employment_position_code" in per.columns:
-        hrp = hrp.merge(per.loc[per["person_id"] == 1, ["household_id", "year", "employment_position_code"]], on=["household_id", "year"], how="left").rename(columns={"employment_position_code": "hrp_employment_position_code"})
-
-    # Remove any duplicate columns from sequential merges
     hrp = hrp.loc[:, ~hrp.columns.duplicated()]
-
-    disability_cols = _safe_cols(per, ["dla_self_care_weekly", "dla_mobility_weekly","attendance_allowance_weekly", "pip_daily_living_weekly", "pip_mobility_weekly",])
-
-    if disability_cols:
-
-        # Returns true if any person in the household receives any kind of disability benefit.
-        per["_any_disability_benefit"] = (per[disability_cols].fillna(0).gt(0).any(axis=1))
-        hh_disability = (
-            per.groupby(["household_id", "year"])["_any_disability_benefit"]
-            .any()
-            .reset_index()
-            .rename(columns={"_any_disability_benefit": "is_disability"})
-        )
-        hrp = hrp.merge(hh_disability, on=["household_id", "year"], how="left")
-        hrp["is_disability"] = hrp["is_disability"].fillna(False)
-    else:
-        hrp["is_disability"] = False
-
-    # Carer flag (any individual receives Carer's Allowance)
-    if "carers_allowance_weekly" in per.columns:
-        per["_is_carer"] = per["carers_allowance_weekly"].fillna(0) > 0
-        hh_carer = (
-            per.groupby(["household_id", "year"])["_is_carer"]
-            .any()
-            .reset_index()
-            .rename(columns={"_is_carer": "is_carer"})
-        )
-        hrp = hrp.merge(hh_carer, on=["household_id", "year"], how="left")
-        hrp["is_carer"] = hrp["is_carer"].fillna(False)
-    else:
-        hrp["is_carer"] = False
-
-    hrp["care_impacted"] = (hrp["is_disability"].fillna(False)) | (hrp["is_carer"].fillna(False))
-
-    # Employment flag implemented - defined as any individual being employed, retired, or unemployed.
-    # ILO codes from database: 0=not recorded, 1=self-employed, 2=FT employee, 3=PT employee, 4=unemployed, 5=govt training, 6=retired, 7=retired/under pension age
-    if "economic_position_ilo_code" in per.columns:
-
-        # Decision: We decided to include government training as working.
-        per["_is_working"] = per["economic_position_ilo_code"].isin([1, 2, 3, 5])
-        per["_is_retired"] = per["economic_position_ilo_code"].isin([6, 7])
-        per["_is_unemployed"] = per["economic_position_ilo_code"] == 4
-
-        agg_emp = per.groupby(["household_id", "year"]).agg(
-            n_working=("_is_working", "sum"),
-            n_retired=("_is_retired", "sum"),
-            n_unemployed=("_is_unemployed", "sum"),
-        ).reset_index()
-
-        hrp = hrp.merge(agg_emp, on=["household_id", "year"], how="left")
-    else:
-        hrp["n_working"] = np.nan
-        hrp["n_retired"] = np.nan
-        hrp["n_unemployed"] = np.nan
-
     return hrp
 
 
@@ -699,29 +508,20 @@ def add_lcf_archetypes(
     dvhh: pd.DataFrame, dvper: pd.DataFrame
 ) -> pd.DataFrame:
     """
-    Add comprehensive archetype classification variables to the LCF
-    household data for differential inflation analysis.
+    Add archetype classification variables to the LCF household data
+    for differential inflation analysis.
 
-    Household groups constructed:
-    1. Tenure type          - social rent / private rent / own outright /
-                              own with mortgage
-    2. Pensioner status     - using multiple signals (age, retirement count,
-                              economic position)
-    3. Income quintile      - weighted, equivalised (modified OECD)
-    4. Children             - has children / single parent / couple with
-                              children / childless
-    5. Disability           - any person receives DLA/PIP/AA
-    6. Carer household      - any person receives Carer's Allowance
-    7. Employment status    - all-working / has-unemployed / all-retired /
-                              mixed
-    8. Region               - 12 GORs + broad grouping
-    9. HRP age band         - Under 30 / 30-49 / 50-64 / 65-74 / 75+
-    10. COVID period        - FY 2019/20 and 2020/21
+    Archetype dimensions:
+    1. Tenure type      - social rent / private rent / own outright /
+                          own with mortgage
+    2. Income quintile  - weighted, equivalised (modified OECD)
+    3. HRP age band     - Under 30 / 30-49 / 50-64 / 65-74 / 75+
+
     """
     df = dvhh.copy()
 
     # Aggregate person-level data to household
-    print("    Aggregating person-level data (disability, employment)...")
+    print("    Aggregating person-level data (HRP demographics)...")
     hh_person = _aggregate_person_to_household(dvper)
     df = df.merge(hh_person, on=["household_id", "year"], how="left")
 
@@ -738,35 +538,12 @@ def add_lcf_archetypes(
             5: "own_outright",
             6: "own_mortgage",
             7: "own_mortgage",
-            8: "rent_free",
         }
         df["tenure_type"] = df["tenure_type1_code"].map(tenure_map).fillna("unknown")
     else:
         df["tenure_type"] = "unknown"
 
-    # Group 2: Pensioner household (improved multi-signal definition)
-    # A household is classified as pensioner if ANY of:
-    # - HRP age >= 66 (state pension age)
-    # - Any person aged 65+ in HH (a046 + a047 > 0)
-    # - HRP economic position (a206) is retired (6 or 7)
-    # - HRP employment position (a015) is retired (2)
-    # This captures early retirees and aligns with the ONS HCI definition
-    # of "retired households".
-    cond_age = df["hrp_age"].fillna(0) >= 66 if "hrp_age" in df.columns \
-        else pd.Series(False, index=df.index)
-    # n_adults_65_to_69 = adults 65-70, n_adults_70_plus = adults 70+ (NOT "number retired")
-    cond_over65 = (
-        df[["n_adults_65_to_69", "n_adults_70_plus"]].fillna(0).sum(axis=1) > 0
-    ) if "n_adults_65_to_69" in df.columns and "n_adults_70_plus" in df.columns \
-        else pd.Series(False, index=df.index)
-    cond_econ = df["hrp_econ_pos"].isin([6, 7]) if "hrp_econ_pos" in df.columns \
-        else pd.Series(False, index=df.index)
-    cond_emp = df["hrp_emp_position"] == 2 if "hrp_emp_position" in df.columns \
-        else pd.Series(False, index=df.index)
-
-    df["is_pensioner"] = cond_age | cond_over65 | cond_econ | cond_emp
-
-    # Group 3: Income quintile (weighted, equivalised)
+    # Group 2: Income quintile (weighted, equivalised)
     # Uses equivalised income (modified OECD scale) from eqincdmp, which
     # adjusts for household size and composition.  Falls back to gross
     # income (p389p) if equivalised is unavailable.
@@ -804,79 +581,7 @@ def add_lcf_archetypes(
     else:
         df["income_quintile"] = np.nan
 
-    # Group 4: Children and household composition
-    # LCF age-banded person counts:
-    #   a040 = children under 2
-    #   a041 = children aged 2 to under 5
-    #   a042 = children aged 5 to under 18
-    #   a043 = adults 18-45, a044 = adults 45-60, a045 = adults 60-65,
-    #   a046 = adults 65-70, a047 = adults 70+
-    # Total children = a040 + a041 + a042
-    # Total adults   = a043 + a044 + a045 + a046 + a047
-    child_cols = _safe_cols(df, ["n_children_under_2", "n_children_2_to_4", "n_children_5_to_17"])
-    adult_cols = _safe_cols(df, ["n_adults_18_to_44", "n_adults_45_to_59", "n_adults_60_to_64", "n_adults_65_to_69", "n_adults_70_plus"])
-
-    if child_cols:
-        df["n_children"] = df[child_cols].fillna(0).sum(axis=1).astype(int)
-        df["has_children"] = df["n_children"] > 0
-    else:
-        df["n_children"] = 0
-        df["has_children"] = False
-
-    if adult_cols:
-        df["n_adults"] = df[adult_cols].fillna(0).sum(axis=1).astype(int)
-    else:
-        df["n_adults"] = np.nan
-
-    # Single parent: 1 adult + at least 1 child
-    df["is_single_parent"] = (df["n_adults"] == 1) & df["has_children"]
-
-    # Household composition category
-    conditions = [
-        df["is_single_parent"],
-        df["has_children"] & (df["n_adults"] >= 2),
-        ~df["has_children"],
-    ]
-    choices = ["single_parent", "couple_with_children", "no_children"]
-    df["hh_composition"] = np.select(conditions, choices, default="unknown")
-
-    # Group 5: Care impacted (disability OR carer)
-    df["care_impacted"] = (
-        df["is_disability"].fillna(False).astype(bool)
-        | df["is_carer"].fillna(False).astype(bool)
-    )
-    df = df.drop(columns=["is_disability", "is_carer"], errors="ignore")
-
-    # Group 6: Employment composition
-    # Based on aggregated person-level economic position (a206)
-    if "n_working" in df.columns:
-        n_work = df["n_working"].fillna(0)
-        n_ret = df["n_retired"].fillna(0)
-        n_unemp = df["n_unemployed"].fillna(0)
-        n_ad = df["n_adults"].fillna(0) if "n_adults" in df.columns \
-            else n_work + n_ret + n_unemp
-
-        conditions_emp = [
-            (n_work > 0) & (n_ret == 0) & (n_unemp == 0),  # all working
-            n_unemp > 0,                                     # has unemployed
-            (n_ret > 0) & (n_work == 0) & (n_unemp == 0),   # all retired
-        ]
-        choices_emp = ["all_working", "has_unemployed", "all_retired"]
-        df["employment_status"] = np.select(
-            conditions_emp, choices_emp, default="mixed"
-        )
-    else:
-        df["employment_status"] = "unknown"
-
-    # Group 7: Region
-    if "region_code" in df.columns:
-        df["region"] = df["region_code"].map(REGION_LABELS).fillna("unknown")
-        df["region_broad"] = df["region_code"].map(REGION_BROAD).fillna("unknown")
-    else:
-        df["region"] = "unknown"
-        df["region_broad"] = "unknown"
-
-    # Group 8: HRP age band
+    # Group 3: HRP age band
     if "hrp_age" in df.columns:
         bins = [0, 30, 50, 65, 75, 200]
         labels = ["under_30", "30_to_49", "50_to_64", "65_to_74", "75_plus"]
@@ -890,18 +595,6 @@ def add_lcf_archetypes(
     else:
         df["hrp_age_band"] = np.nan
 
-    # Group 10: Household size
-    # a049 = household size (total persons); NOT a040 which is children < 2
-    if "household_size" in df.columns:
-        df["hh_size"] = df["household_size"]
-    elif "n_adults" in df.columns and "n_children" in df.columns:
-        df["hh_size"] = df["n_adults"] + df["n_children"]
-    else:
-        df["hh_size"] = np.nan
-
-    # COVID period flag (expanded: both 2019/20 and 2020/21)
-    df["is_covid_year"] = df["year"].isin([2019, 2020])
-
     return df
 
 
@@ -914,16 +607,8 @@ def qa_cell_sizes(df: pd.DataFrame) -> None:
     """
     group_vars = [
         ("tenure_type", None),
-        ("is_pensioner", None),
         ("income_quintile", None),
-        ("has_children", None),
-        ("is_single_parent", None),
-        ("is_disability", None),
-        ("is_carer", None),
-        ("employment_status", None),
-        ("region_broad", None),
         ("hrp_age_band", None),
-        ("hh_composition", None),
     ]
 
     warnings_found = []
@@ -1060,40 +745,6 @@ def main() -> None:
     print(f"\n  Tenure distribution:")
     if "tenure_type" in analysis.columns:
         for t, n in analysis["tenure_type"].value_counts().items():
-            pct = 100 * n / len(analysis)
-            print(f"    {t}: {n:,} ({pct:.1f}%)")
-
-    print(f"\n  Pensioner households: "
-          f"{analysis['is_pensioner'].sum():,} "
-          f"({100*analysis['is_pensioner'].mean():.1f}%)")
-
-    print(f"\n  Care-impacted households (carer or disability): "
-          f"{analysis['care_impacted'].sum():,} "
-          f"({100*analysis['care_impacted'].mean():.1f}%)")
-
-    print(f"\n  Single-parent households: "
-          f"{analysis['is_single_parent'].sum():,} "
-          f"({100*analysis['is_single_parent'].mean():.1f}%)")
-
-    print(f"\n  Households with children: "
-          f"{analysis['has_children'].sum():,} "
-          f"({100*analysis['has_children'].mean():.1f}%)")
-
-    print(f"\n  Household composition:")
-    if "hh_composition" in analysis.columns:
-        for t, n in analysis["hh_composition"].value_counts().items():
-            pct = 100 * n / len(analysis)
-            print(f"    {t}: {n:,} ({pct:.1f}%)")
-
-    print(f"\n  Employment status:")
-    if "employment_status" in analysis.columns:
-        for t, n in analysis["employment_status"].value_counts().items():
-            pct = 100 * n / len(analysis)
-            print(f"    {t}: {n:,} ({pct:.1f}%)")
-
-    print(f"\n  Region (broad):")
-    if "region_broad" in analysis.columns:
-        for t, n in analysis["region_broad"].value_counts().items():
             pct = 100 * n / len(analysis)
             print(f"    {t}: {n:,} ({pct:.1f}%)")
 

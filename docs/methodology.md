@@ -109,38 +109,21 @@ $$\text{share}_{d}=\frac{\text{division expenditure } (p60dt)}{\text{total COICO
 ### Archetype variables (household classifications)
 
 #### 1. Tenure type (`tenure_type`)
-Based on `a121`: social_rent, private_rent, own_outright, own_mortgage, rent_free, unknown.
+Based on `a121`: social_rent, private_rent, own_outright, own_mortgage. Rent-free households (~50/year, below the 100-observation minimum) are excluded.
 
-#### 2. Pensioner flag (`is_pensioner`)
-Multi-signal definition: `hrp_age >= 66` OR any person aged 65+ (`a046 + a047 > 0`, i.e. adults 65-70 + adults 70+) OR HRP economic position is retired (a206 in {6,7}) OR HRP employment position is retired (a015 == 2). This captures early retirees and aligns with ONS HCI methodology.
-
-#### 3. Income quintile (`income_quintile`)
+#### 2. Income quintile (`income_quintile`)
 **Weighted** quintiles using equivalised income (`eqincdmp`, modified OECD scale) and survey weights (`weighta`). Computed within each year using cumulative weight approach. Falls back to unweighted gross income if equivalised income is unavailable. Rows with missing/zero/negative income are NaN.
 
-#### 4. Children and composition
-- `n_children` (sum of `a040` + `a041` + `a042`: children under 2 + 2-5 + 5-18), `has_children` (boolean)
-- `n_adults` (sum of `a043` + `a044` + `a045` + `a046` + `a047`: adults across all age bands)
-- `is_single_parent` (1 adult + at least 1 child)
-- `hh_composition`: single_parent / couple_with_children / no_children
-
-#### 5. Disability (`is_disability`)
-Aggregated from person-level: household is flagged if **any** person receives DLA self-care (b403), DLA mobility (b405), Attendance Allowance (b421), PIP care (b552), or PIP mobility (b553). Both DLA and PIP are captured because DLA was gradually replaced by PIP during the study period.
-
-#### 6. Carer household (`is_carer`)
-Household where any person receives Carer's Allowance (b343 > 0).
-
-#### 7. Employment status (`employment_status`)
-Aggregated from person-level economic position (a206): all_working / has_unemployed / all_retired / mixed.
-
-#### 8. Region (`region`, `region_broad`)
-- `region`: 12 Government Office Regions from `gorx`
-- `region_broad`: aggregated to North / Midlands / South / London / Devolved (for adequate cell sizes)
-
-#### 9. HRP age band (`hrp_age_band`)
+#### 3. HRP age band (`hrp_age_band`)
 Continuous HRP age grouped into: under_30, 30_to_49, 50_to_64, 65_to_74, 75_plus.
 
-#### 10. COVID flag (`is_covid_year`)
+#### 4. COVID flag (`is_covid_year`)
 Expanded to cover both FY 2019/20 (year==2019) and FY 2020/21 (year==2020), since COVID effects began in March 2020 and extended across both financial years.
+
+#### Descriptive columns (not used as archetype dimensions)
+- `n_children`, `has_children`, `n_adults`, `is_single_parent`: household structure
+- `hh_size`: total persons (from `a049` or sum of adults + children)
+- `region`: 12 Government Office Regions from `gorx`
 
 ### Quality assurance
 

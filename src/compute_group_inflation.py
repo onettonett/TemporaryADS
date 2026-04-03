@@ -47,12 +47,7 @@ CONCORDANCE: Dict[str, str] = {
 ARCHETYPE_COLS: List[str] = [
     "income_quintile",
     "tenure_type",
-    "region_broad",
     "hrp_age_band",
-    "hh_composition",
-    "employment_status",
-    "is_pensioner",
-    "care_impacted",
 ]
 
 

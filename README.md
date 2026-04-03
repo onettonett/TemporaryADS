@@ -13,7 +13,7 @@ Construct group-specific inflation series using **LCF microdata** expenditure we
 
 | Script | Purpose |
 |---|---|
-| `wrangle_lcf.py` | Clean LCF, compute COICOP expenditure shares, build 8 archetype flags |
+| `wrangle_lcf.py` | Clean LCF, compute COICOP expenditure shares, build 3 archetype dimensions |
 | `wrangle_mm23.py` | Extract CPIH monthly indices from MM23 |
 | `wrangle_hci.py` | Extract ONS HCI validation benchmarks |
 | `compute_group_inflation.py` | Laspeyres: combine LCF shares with CPIH price changes |

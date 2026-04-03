@@ -905,12 +905,7 @@ def fig_dimension_gap(infl: pd.DataFrame) -> None:
     titles = {
         "income_quintile":   "Income Quintile",
         "tenure_type":       "Tenure Type",
-        "is_pensioner":      "Pensioner Status",
-        "hh_composition":    "Household Composition",
-        "employment_status": "Employment Status",
-        "care_impacted":     "Care-Impacted",
         "hrp_age_band":      "HRP Age Band",
-        "region_broad":      "Broad Region",
     }
 
     fig, ax = plt.subplots(figsize=(7.16, 3.0))

@@ -38,8 +38,7 @@ _P2 = CHARTS / "02_expenditure_patterns"
 _P3 = CHARTS / "03_price_environment"
 _P4 = CHARTS / "04_group_inflation"
 _P5 = CHARTS / "05_hci_validation"
-_P6 = CHARTS / "06_clustering"
-for _d in (_P1, _P2, _P3, _P4, _P5, _P6):
+for _d in (_P1, _P2, _P3, _P4, _P5):
     _d.mkdir(parents=True, exist_ok=True)
 
 plt.rcParams.update({"axes.spines.top": False, "axes.spines.right": False})
@@ -108,12 +107,7 @@ QUINTILE_LABELS = {"1.0": "Q1", "2.0": "Q2", "3.0": "Q3", "4.0": "Q4", "5.0": "Q
 ARCHETYPE_TITLES = {
     "income_quintile":   "Income Quintile",
     "tenure_type":       "Tenure Type",
-    "is_pensioner":      "Pensioner Status",
-    "hh_composition":    "Household Composition",
-    "employment_status": "Employment Status",
-    "care_impacted":     "Care-Impacted Status",
     "hrp_age_band":      "HRP Age Band",
-    "region_broad":      "Broad Region",
 }
 
 CRISIS_YEARS = (2022, 2023)
@@ -186,10 +180,6 @@ def _sort_arch_values(arch: str, vals) -> list:
     if arch == "hrp_age_band":
         order = ["under_30", "30_to_49", "50_to_64", "65_to_74", "75_plus"]
         return [v for v in order if v in vals] + [v for v in vals if v not in order]
-    if arch in ("is_pensioner", "care_impacted"):
-        return [v for v in ["True", "False"] if v in vals] + [
-            v for v in vals if v not in ("True", "False")
-        ]
     if arch == "tenure_type":
         return [v for v in TENURE_4 if v in vals]
     return sorted(vals)
@@ -198,10 +188,6 @@ def _sort_arch_values(arch: str, vals) -> list:
 def _label(arch: str, val: str) -> str:
     if arch == "income_quintile":
         return QUINTILE_LABELS.get(val, val)
-    if arch == "is_pensioner":
-        return "Pensioner" if val == "True" else "Non-Pensioner"
-    if arch == "care_impacted":
-        return "Care-Impacted" if val == "True" else "No Care Impact"
     return val.replace("_", " ").title()
 
 
@@ -262,7 +248,7 @@ def p1_sample_size(shares: pd.DataFrame) -> None:
 
 def p1_cell_sizes(shares: pd.DataFrame) -> None:
     print("\n[P1-2] Archetype cell sizes heatmap")
-    arch_cols = [c for c in ARCHETYPE_TITLES if c in shares.columns and c != "region_broad"]
+    arch_cols = [c for c in ARCHETYPE_TITLES if c in shares.columns]
     years = sorted(shares["year"].unique())
     rows = []
     for arch in arch_cols:
@@ -780,24 +766,6 @@ def p5_tenure_comparison(infl: pd.DataFrame, hci: pd.DataFrame,
     _save(fig, "p5_20_tenure_comparison.png", _P5)
 
 
-def p5_pensioner_comparison(infl: pd.DataFrame, hci: pd.DataFrame,
-                             headline: pd.Series) -> None:
-    print("\n[P5-21] Pensioner comparison vs HCI Retired/Non-Retired")
-    hci_rates = _hci_fy_rates(hci, "retirement")
-    if hci_rates.empty:
-        print("  No HCI retirement data, skipping.")
-        return
-    fig, ax = plt.subplots(figsize=(11, 5))
-    _plot_hci_comparison(ax, hci_rates, ["Retired", "Non-Retired"],
-                         infl, "is_pensioner",
-                         {"True": "Pensioner", "False": "Non-Pensioner"},
-                         headline)
-    ax.set_title("Validation — Pensioner Status: My Estimates vs HCI Retired/Non-Retired\n"
-                 "(solid = my estimates, dashed = HCI, dotted = CPIH headline)")
-    fig.tight_layout()
-    _save(fig, "p5_21_pensioner_comparison.png", _P5)
-
-
 def p5_residual_scatter(infl: pd.DataFrame, hci: pd.DataFrame) -> None:
     print("\n[P5-22] Residual scatter: my estimates vs HCI")
     mappings = [
@@ -809,8 +777,6 @@ def p5_residual_scatter(infl: pd.DataFrame, hci: pd.DataFrame) -> None:
             "own_mortgage":  "Mortgagor and other owner occupier",
             "social_rent":   "Social and other renter",
         }),
-        ("is_pensioner", "retirement",
-         {"True": "Retired", "False": "Non-Retired"}),
     ]
     records = []
     for arch, hci_grouping, val_map in mappings:
@@ -999,184 +965,12 @@ def p4_shifting_burden(infl: pd.DataFrame) -> None:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# PHASE 6 — Clustering (Strand 2)
-# ═══════════════════════════════════════════════════════════════════════════
-
-def _silhouette_scores(X: np.ndarray, k_range: range) -> dict:
-    """Compute silhouette score for each k in k_range using simple K-means."""
-    from sklearn.cluster import KMeans
-    from sklearn.metrics import silhouette_score
-    scores = {}
-    for k in k_range:
-        km = KMeans(n_clusters=k, n_init=10, random_state=42)
-        labels = km.fit_predict(X)
-        scores[k] = silhouette_score(X, labels, sample_size=min(5000, len(X)),
-                                     random_state=42)
-    return scores
-
-
-def p6_clustering(shares: pd.DataFrame) -> None:
-    """Strand 2: K-means clustering on COICOP expenditure share vectors."""
-    print("\n── Phase 6: Clustering (Strand 2) ──")
-    try:
-        from sklearn.cluster import KMeans
-        from sklearn.metrics import silhouette_score
-        from sklearn.decomposition import PCA
-    except ImportError:
-        print("  sklearn not available — skipping clustering phase.")
-        return
-
-    share_cols = [
-        "share_01_food_non_alcoholic", "share_02_alcohol_tobacco",
-        "share_03_clothing_footwear", "share_04_actual_rent",
-        "share_04_energy_other", "share_05_furnishings", "share_06_health",
-        "share_07_transport", "share_08_communication",
-        "share_09_recreation_culture", "share_10_education",
-        "share_11_restaurants_hotels", "share_12_misc_goods_services",
-    ]
-    avail = [c for c in share_cols if c in shares.columns]
-    if len(avail) < 10:
-        print("  Not enough share columns, skipping.")
-        return
-
-    sub = shares[shares["tenure_type"].isin(TENURE_4)].dropna(subset=avail).copy()
-    X = sub[avail].values
-    tenure_labels = sub["tenure_type"].values
-
-    # --- Silhouette analysis ---
-    print("\n[P6] Silhouette analysis")
-    k_range = range(2, 9)
-    scores = _silhouette_scores(X, k_range)
-    best_k = max(scores, key=scores.get)
-    print(f"  Best k = {best_k} (silhouette = {scores[best_k]:.3f})")
-
-    fig, ax = plt.subplots(figsize=(7, 4))
-    ax.plot(list(scores.keys()), list(scores.values()), marker="o",
-            color="steelblue", linewidth=2)
-    ax.axvline(best_k, color="tomato", linestyle="--", label=f"Best k = {best_k}")
-    ax.set_xlabel("Number of clusters (k)")
-    ax.set_ylabel("Silhouette score")
-    ax.set_title("Silhouette Analysis for K-Means on COICOP Shares")
-    ax.legend()
-    ax.yaxis.grid(True, linestyle="--", alpha=0.4)
-    fig.tight_layout()
-    _save(fig, "p6_silhouette_analysis.png", _P6)
-
-    # --- Fit final model ---
-    km = KMeans(n_clusters=best_k, n_init=20, random_state=42)
-    cluster_labels = km.fit_predict(X)
-
-    # --- Cluster profile heatmap ---
-    print(f"\n[P6] Cluster profiles (k={best_k})")
-    profile_df = pd.DataFrame(X, columns=avail)
-    profile_df["cluster"] = cluster_labels
-    means = profile_df.groupby("cluster")[avail].mean()
-    short_names = []
-    coicop_short_map = {
-        "share_01_food_non_alcoholic": "Food",
-        "share_02_alcohol_tobacco": "Alcohol",
-        "share_03_clothing_footwear": "Clothing",
-        "share_04_actual_rent": "Rent",
-        "share_04_energy_other": "Energy/Hsg",
-        "share_05_furnishings": "Furnishings",
-        "share_06_health": "Health",
-        "share_07_transport": "Transport",
-        "share_08_communication": "Comms",
-        "share_09_recreation_culture": "Recreation",
-        "share_10_education": "Education",
-        "share_11_restaurants_hotels": "Restaurants",
-        "share_12_misc_goods_services": "Misc",
-    }
-    short_names = [coicop_short_map.get(c, c) for c in avail]
-
-    fig, ax = plt.subplots(figsize=(12, max(3, best_k * 0.8)))
-    im = ax.imshow(means.values, cmap="YlOrRd", aspect="auto")
-    for i in range(means.shape[0]):
-        for j in range(means.shape[1]):
-            ax.text(j, i, f"{means.iloc[i, j]:.2f}", ha="center", va="center",
-                    fontsize=7, color="black")
-    ax.set_xticks(range(len(short_names)))
-    ax.set_xticklabels(short_names, rotation=45, ha="right", fontsize=8)
-    ax.set_yticks(range(best_k))
-    ax.set_yticklabels([f"Cluster {i}" for i in range(best_k)])
-    ax.set_title(f"K-Means Cluster Profiles (k={best_k}): Mean COICOP Shares\n"
-                 "(each row is a data-driven household expenditure archetype)")
-    fig.colorbar(im, ax=ax, label="Mean share", shrink=0.8)
-    fig.tight_layout()
-    _save(fig, "p6_cluster_profiles.png", _P6)
-
-    # --- Cluster × tenure cross-tab ---
-    print(f"\n[P6] Cluster × tenure cross-tabulation")
-    ct = pd.crosstab(cluster_labels, tenure_labels, normalize="index") * 100
-    ct = ct.reindex(columns=TENURE_4)
-    ct.columns = [_label("tenure_type", c) for c in ct.columns]
-    ct.index = [f"Cluster {i}" for i in ct.index]
-
-    fig, ax = plt.subplots(figsize=(8, max(3, best_k * 0.7)))
-    im = ax.imshow(ct.values, cmap="Blues", aspect="auto", vmin=0, vmax=100)
-    for i in range(ct.shape[0]):
-        for j in range(ct.shape[1]):
-            ax.text(j, i, f"{ct.iloc[i, j]:.0f}%", ha="center", va="center",
-                    fontsize=9, fontweight="bold" if ct.iloc[i, j] > 40 else "normal")
-    ax.set_xticks(range(ct.shape[1]))
-    ax.set_xticklabels(ct.columns, fontsize=9)
-    ax.set_yticks(range(ct.shape[0]))
-    ax.set_yticklabels(ct.index)
-    ax.set_title("Cluster Composition by Tenure Group\n"
-                 "(do data-driven clusters align with tenure categories?)")
-    fig.colorbar(im, ax=ax, label="% of cluster", shrink=0.8)
-    fig.tight_layout()
-    _save(fig, "p6_cluster_tenure_crosstab.png", _P6)
-
-    # Save cross-tab as CSV too
-    ct_path = _P6 / "p6_cluster_tenure_crosstab.csv"
-    ct.to_csv(ct_path)
-    print(f"  Saved: {ct_path.relative_to(CHARTS)}")
-
-    # --- PCA scatter ---
-    print(f"\n[P6] PCA scatter (2D) coloured by cluster")
-    pca = PCA(n_components=2, random_state=42)
-    X2 = pca.fit_transform(X)
-    # Subsample for readable plot
-    rng = np.random.RandomState(42)
-    n_plot = min(4000, len(X2))
-    idx = rng.choice(len(X2), n_plot, replace=False)
-
-    markers = {"social_rent": "o", "private_rent": "s",
-               "own_outright": "^", "own_mortgage": "D"}
-    fig, ax = plt.subplots(figsize=(9, 7))
-    for ci in range(best_k):
-        for t in TENURE_4:
-            mask = (cluster_labels[idx] == ci) & (tenure_labels[idx] == t)
-            if mask.sum() == 0:
-                continue
-            ax.scatter(X2[idx][mask, 0], X2[idx][mask, 1],
-                       c=[_colour(ci, best_k)], marker=markers[t],
-                       s=12, alpha=0.35, linewidths=0)
-    # Legends
-    cluster_handles = [plt.Line2D([0], [0], marker="o", color="w",
-                       markerfacecolor=_colour(ci, best_k), markersize=8,
-                       label=f"Cluster {ci}") for ci in range(best_k)]
-    tenure_handles = [plt.Line2D([0], [0], marker=markers[t], color="grey",
-                      markersize=8, linestyle="None",
-                      label=_label("tenure_type", t)) for t in TENURE_4]
-    ax.legend(handles=cluster_handles + tenure_handles,
-              bbox_to_anchor=(1.01, 1), loc="upper left", fontsize=7)
-    ax.set_xlabel(f"PC1 ({pca.explained_variance_ratio_[0]:.1%} variance)")
-    ax.set_ylabel(f"PC2 ({pca.explained_variance_ratio_[1]:.1%} variance)")
-    ax.set_title(f"PCA of COICOP Expenditure Shares (n={n_plot:,})\n"
-                 "Colour = K-means cluster, Shape = tenure group")
-    fig.tight_layout()
-    _save(fig, "p6_cluster_pca.png", _P6)
-
-
-# ═══════════════════════════════════════════════════════════════════════════
 # MAIN
 # ═══════════════════════════════════════════════════════════════════════════
 
 def main() -> None:
     print("=" * 60)
-    print("Six-Phase Inflation Visualisation Pipeline")
+    print("Five-Phase Inflation Visualisation Pipeline")
     print("=" * 60)
     print(f"  Output directory: {CHARTS}")
     try:
@@ -1218,11 +1012,7 @@ def main() -> None:
     print("\n── Phase 5: HCI Validation ──")
     p5_tenure_comparison(infl, hci, headline)
     p5_income_comparison(infl, hci, headline)
-    p5_pensioner_comparison(infl, hci, headline)
     p5_residual_scatter(infl, hci)
-
-    print("\n── Phase 6: Clustering (Strand 2) ──")
-    p6_clustering(shares)
 
     saved = sorted(CHARTS.rglob("*.png"))
     print(f"\nDone. {len(saved)} charts saved to {CHARTS}")
