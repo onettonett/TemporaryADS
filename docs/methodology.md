@@ -7,18 +7,18 @@ The outputs are used downstream to construct household-type-specific spending ba
 
 ### Pipeline steps (6 stages)
 
-1. **Extract** - load dvhh + dvper Stata files, select target variables
-2. **Extract** - load person-level data for disability, employment, carer status
+1. **Extract** - load dvhh Stata files, select target household-level variables
+2. **Extract** - load dvper Stata files, select target person-level variables (age, sex)
 3. **Interim save** - save raw extracted data before transformations
 4. **Clean** - handle negative expenditures, validate denominators, flag zeros
-5. **Shares + Archetypes** - compute COICOP shares, filter implausible households, build all household group flags
+5. **Shares + Archetypes** - compute COICOP shares, filter implausible households, build household archetype flags
 6. **QA** - cell-size checks, share-sum validation
 
 ### Inputs (raw)
 For each year 2015-2023 it reads two Stata files from `data/raw/LCF/`:
 
 - **`dvhh`** (derived household file): household expenditure + household demographics
-- **`dvper`** (derived person file): person-level demographics, economic position, disability benefits, carer status
+- **`dvper`** (derived person file): person-level demographics (age, sex) used only to pick up HRP (person 1) age
 
 The script lowercases all column names on read and never modifies the raw inputs on disk.
 
@@ -33,14 +33,12 @@ The script writes three parquet datasets:
 - `data/interim/lcf_person.parquet`
   Person-year rows containing a selected subset of `dvper` columns plus:
   - `year` (integer, 2015-2023)
-  - Disability benefit amounts (b403, b405, b421, b552, b553)
-  - Carer's Allowance (b343)
-  - Economic position (a206, a015)
+  - `person_age`, `person_sex_code` (used only to recover HRP demographics)
 
 - `data/processed/lcf_expenditure_shares.parquet`
   Household-year rows that start from `lcf_household` and add:
   - `share_*` COICOP division expenditure shares (domain-filtered)
-  - Full archetype variables (see below)
+  - Three archetype variables (see below)
 
 ### What is extracted (column selection decisions)
 
@@ -52,49 +50,33 @@ From `dvhh` it attempts to keep:
 
 - **Household demographics**
   - `a049` (household size - total persons)
-  - `a062` (family type - detailed: 1 man, 1 woman, couples+children etc.)
-  - `a121`, `a122` (tenure type codes)
-  - `gorx` (Government Office Region, 1-12)
-  - Age-banded person counts (sum to `a049`):
-    - `a040` (children under 2), `a041` (children 2-5), `a042` (children 5-18)
-    - `a043` (adults 18-45), `a044` (adults 45-60), `a045` (adults 60-65)
-    - `a046` (adults 65-70), `a047` (adults 70+)
-  - `a054` (number of workers in household)
-  - `sexhrp` (sex of HRP)
-  - `a065p` (age band of HRP, coded)
-  - `a071` (NS-SEC of HRP)
+  - `a121` (tenure type code)
 
 - **Income / housing payment variables**
   - `p389p` (gross normal weekly household income)
   - `eqincdmp` (equivalised income, modified OECD scale)
-  - `b010` (rent, gross)
-  - `b020` (mortgage payments)
+  - `b010` (rent, gross - used for COICOP 04 rent/energy decomposition)
 
 - **Expenditure totals**
-  - `p630tp` (total COICOP expenditure)
+  - `hh_total_coicop_expenditure` (total COICOP expenditure)
 
 - **COICOP division totals**
   - `p600t`-`p612t` (division totals; `p601t`-`p612t` are used to compute shares)
 
-- **COICOP class-level totals**
-  - 24 selected `ck*t` variables for granular CPIH matching
-
 From `dvper` it attempts to keep:
 
-- `case` (link key), `person` (person number), `a005p` (age), `a006p` (sex), `a200` (household size)
-- `a206` (economic position, ILO), `a015` (employment position)
-- `b403` (DLA self-care), `b405` (DLA mobility), `b421` (Attendance Allowance)
-- `b552` (PIP care), `b553` (PIP mobility)
-- `b343` (Carer's Allowance)
+- `case` (link key), `person` (person number within household)
+- `a005p` (age), `a006p` (sex)
 
 ### Expenditure cleaning
 
 Before computing shares, the pipeline applies these cleaning steps:
 
-1. **Negative total expenditure** (`p630tp < 0`) is set to NaN. These are implausible for spending basket construction.
+1. **Negative total expenditure** (`hh_total_coicop_expenditure < 0`) is set to NaN. These are implausible for spending basket construction.
 2. **Negative division totals** (`p601t`-`p612t < 0`) are set to NaN.
-3. **Denominator consistency check**: if `p630tp` diverges from `sum(p601t:p612t)` by more than 1% for a substantial proportion of households, the division sum is used as the denominator instead, for internal consistency.
-4. **Zero/missing total expenditure** households are flagged (shares will be NaN). These households had no valid diary expenditure.
+3. **Plausibility filter**: households with total expenditure below £30/week (likely incomplete diary) or above £3,000/week (likely data-entry error) are removed before computing shares.
+4. **Denominator consistency check**: if `hh_total_coicop_expenditure` diverges from `sum(p601t:p612t)` by more than 1% for a substantial proportion of households, the division sum is used as the denominator instead, for internal consistency.
+5. **Zero/missing total expenditure** households are flagged (shares will be NaN). These households had no valid diary expenditure.
 
 ### COICOP division expenditure share construction (`share_*`)
 
@@ -108,8 +90,10 @@ $$\text{share}_{d}=\frac{\text{division expenditure } (p60dt)}{\text{total COICO
 
 ### Archetype variables (household classifications)
 
+The analysis uses **three** archetype dimensions, chosen because they are (a) conceptually independent, (b) directly relevant to differential inflation exposure, and (c) populated with adequate cell sizes (≥100 households/year) across the 2015-2023 panel.
+
 #### 1. Tenure type (`tenure_type`)
-Based on `a121`: social_rent, private_rent, own_outright, own_mortgage. Rent-free households (~50/year, below the 100-observation minimum) are excluded.
+Based on `a121`: social_rent, private_rent, own_outright, own_mortgage. Rent-free households (~50/year, below the 100-observation minimum) are excluded by leaving them unmapped (NaN/"unknown").
 
 #### 2. Income quintile (`income_quintile`)
 **Weighted** quintiles using equivalised income (`eqincdmp`, modified OECD scale) and survey weights (`weighta`). Computed within each year using cumulative weight approach. Falls back to unweighted gross income if equivalised income is unavailable. Rows with missing/zero/negative income are NaN.
@@ -117,13 +101,9 @@ Based on `a121`: social_rent, private_rent, own_outright, own_mortgage. Rent-fre
 #### 3. HRP age band (`hrp_age_band`)
 Continuous HRP age grouped into: under_30, 30_to_49, 50_to_64, 65_to_74, 75_plus.
 
-#### 4. COVID flag (`is_covid_year`)
-Expanded to cover both FY 2019/20 (year==2019) and FY 2020/21 (year==2020), since COVID effects began in March 2020 and extended across both financial years.
-
-#### Descriptive columns (not used as archetype dimensions)
-- `n_children`, `has_children`, `n_adults`, `is_single_parent`: household structure
-- `hh_size`: total persons (from `a049` or sum of adults + children)
-- `region`: 12 Government Office Regions from `gorx`
+#### Descriptive columns (carried through but not used as archetype dimensions)
+- `household_size` (from `a049`): total persons in household
+- `hrp_age`: continuous HRP age before banding
 
 ### Quality assurance
 

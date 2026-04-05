@@ -1,19 +1,3 @@
-"""
-visualise_inflation.py
-======================
-Five-phase visualisation strategy for the inflation heterogeneity project.
-
-  Phase 1 – Sample and Coverage
-  Phase 2 – Expenditure Heterogeneity
-  Phase 3 – The Price Environment
-  Phase 4 – Group-Specific Inflation
-  Phase 5 – Validation Against HCI
-
-Charts saved as PNG at 150 dpi into phase subfolders under data/processed/charts/:
-  01_data_quality/ · 02_expenditure_patterns/ · 03_price_environment/
-  04_group_inflation/ · 05_hci_validation/
-"""
-
 from __future__ import annotations
 
 import pathlib
@@ -25,11 +9,18 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+from data_loaders import (
+    load_cpih_monthly,
+    load_cpih_fy_indices,
+    load_hci_validation,
+    load_lcf_shares,
+)
+
 warnings.filterwarnings("ignore")
 
-ROOT      = pathlib.Path(__file__).resolve().parents[1]
-PROCESSED = ROOT / "data" / "processed"
-CHARTS    = PROCESSED / "charts"
+ROOT   = pathlib.Path(__file__).resolve().parents[1]
+OUTPUT = ROOT / "data" / "output"
+CHARTS = OUTPUT / "charts"
 CHARTS.mkdir(parents=True, exist_ok=True)
 
 # One subfolder per narrative phase
@@ -204,14 +195,12 @@ def _colour(i: int, n: int):
 # ── Data loading ──────────────────────────────────────────────────────────
 
 def load_data():
-    infl    = pd.read_parquet(PROCESSED / "group_inflation_rates.parquet")
-    decomp  = pd.read_parquet(PROCESSED / "inflation_decomposition.parquet")
-    shares  = pd.read_parquet(PROCESSED / "lcf_expenditure_shares.parquet")
-    monthly = pd.read_parquet(PROCESSED / "cpih_monthly_indices.parquet")
-    monthly["date"] = pd.to_datetime(monthly["date"])
-    fy_idx  = pd.read_parquet(PROCESSED / "cpih_annual_fy_indices.parquet")
-    hci     = pd.read_parquet(PROCESSED / "hci_validation.parquet")
-    hci["date"] = pd.to_datetime(hci["date"])
+    infl    = pd.read_csv(OUTPUT / "group_inflation_rates.csv")
+    decomp  = pd.read_csv(OUTPUT / "inflation_decomposition.csv")
+    shares  = load_lcf_shares()
+    monthly = load_cpih_monthly()
+    fy_idx  = load_cpih_fy_indices()
+    hci     = load_hci_validation()
     # Normalise archetype_value to string throughout
     infl["archetype_value"]   = infl["archetype_value"].astype(str)
     decomp["archetype_value"] = decomp["archetype_value"].astype(str)
@@ -451,11 +440,6 @@ def p2_share_correlation(shares: pd.DataFrame) -> None:
     fig.tight_layout()
     _save(fig, "p2_8_share_correlation.png", _P2)
 
-
-# ═══════════════════════════════════════════════════════════════════════════
-# PHASE 3 — The Price Environment
-# ═══════════════════════════════════════════════════════════════════════════
-
 def p3_monthly_index(monthly: pd.DataFrame) -> None:
     print("\n[P3-9] CPIH sub-index time series rebased to Jan 2015 = 100")
     cols = [c for c in ALL_PRICE_COLS if c in monthly.columns]
@@ -527,11 +511,6 @@ def p3_volatility_ranking(fy_idx: pd.DataFrame) -> None:
     ax.xaxis.grid(True, linestyle="--", alpha=0.5)
     fig.tight_layout()
     _save(fig, "p3_11_volatility_ranking.png", _P3)
-
-
-# ═══════════════════════════════════════════════════════════════════════════
-# PHASE 4 — Group-Specific Inflation
-# ═══════════════════════════════════════════════════════════════════════════
 
 def p4_all_group_series(infl: pd.DataFrame, headline: pd.Series) -> None:
     print("\n[P4] Group-specific inflation series (all archetypes)")
@@ -681,11 +660,6 @@ def p4_main_body_extras(infl: pd.DataFrame, decomp: pd.DataFrame,
         _crisis_decomp(decomp, arch, all_groups)   # all 4 tenure groups
         _cumulative_ppp(infl, headline, arch)
 
-
-# ═══════════════════════════════════════════════════════════════════════════
-# PHASE 5 — Validation Against HCI
-# ═══════════════════════════════════════════════════════════════════════════
-
 def _hci_fy_rates(hci: pd.DataFrame, grouping: str) -> pd.DataFrame:
     """Annual FY inflation rates from HCI index data (pct change of FY mean index)."""
     sub = hci[
@@ -814,11 +788,6 @@ def p5_residual_scatter(infl: pd.DataFrame, hci: pd.DataFrame) -> None:
     ax.legend(fontsize=7, bbox_to_anchor=(1.01, 1), loc="upper left")
     fig.tight_layout()
     _save(fig, "p5_22_residual_scatter.png", _P5)
-
-
-# ═══════════════════════════════════════════════════════════════════════════
-# NEW — Tenure-focused extras
-# ═══════════════════════════════════════════════════════════════════════════
 
 def p1_sample_by_tenure(shares: pd.DataFrame) -> None:
     """Grouped bar: sample size per year for the 4 tenure groups."""
@@ -962,11 +931,6 @@ def p4_shifting_burden(infl: pd.DataFrame) -> None:
     fig.colorbar(im, ax=ax, label="Inflation rate (%)", shrink=0.8)
     fig.tight_layout()
     _save(fig, "p4_shifting_burden.png", _P4)
-
-
-# ═══════════════════════════════════════════════════════════════════════════
-# MAIN
-# ═══════════════════════════════════════════════════════════════════════════
 
 def main() -> None:
     print("=" * 60)

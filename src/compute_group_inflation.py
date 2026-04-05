@@ -1,254 +1,178 @@
 """
 compute_group_inflation.py
 ==========================
-Compute group-specific inflation using LCF expenditure baskets and CPIH price
+Compute group-specific Laspeyres inflation for each archetype (tenure_type,
+income_quintile, hrp_age_band) using LCF expenditure shares and CPIH sub-
 indices.
-"""
 
-from __future__ import annotations
+Reads:
+    data/output/lcf_expenditure_shares.csv    (from wrangle_lcf.py)
+    data/cleaned/MM23_cleaned.xlsx            (via data_loaders.py)
+
+Writes:
+    data/output/group_inflation_rates.csv
+    data/output/inflation_decomposition.csv
+    data/output/archetype_inflation_summary.csv
+"""
 
 import pathlib
 import warnings
-from typing import Dict, List
 
-import numpy as np
 import pandas as pd
+
+from data_loaders import load_cpih_monthly, load_lcf_shares
 
 warnings.filterwarnings("ignore")
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-PROCESSED = ROOT / "data" / "processed"
+OUTPUT = ROOT / "data" / "output"
+OUTPUT.mkdir(parents=True, exist_ok=True)
 
-# Share → price column mapping
-CONCORDANCE: Dict[str, str] = {
-    "share_01_food_non_alcoholic": "food_non_alcoholic",
-    "share_02_alcohol_tobacco": "alcohol_tobacco",
-    "share_03_clothing_footwear": "clothing_footwear",
-    "share_04_actual_rent": "actual_rents",
-    # share_04_energy_other = COICOP 04 minus actual rent (energy + water + maintenance).
-    # The LCF cannot isolate energy (04.5) from water (04.4) and maintenance (04.3) at
-    # household level.  Mapping to the pure electricity_gas_fuels index would overstate
-    # the energy price shock by ~2-3×; mapping to the full housing_fuel_power (COICOP 04)
-    # composite understates because stable rent prices dampen the index.
-    # Instead we derive 'non_rent_housing_fuel': the price change for the non-rent portion
-    # of COICOP 04, computed by backing actual-rents out of housing_fuel_power using OLS
-    # weights fitted on pre-crisis years.  See derive_non_rent_hfp() below.
-    "share_04_energy_other": "non_rent_housing_fuel",
-    "share_05_furnishings": "furnishings",
-    "share_06_health": "health",
-    "share_07_transport": "transport",
-    "share_08_communication": "communication",
-    "share_09_recreation_culture": "recreation_culture",
-    "share_10_education": "education",
-    "share_11_restaurants_hotels": "restaurants_hotels",
+# Map LCF share columns → CPIH sub-index names (from MM23).
+# The COICOP 04 split is handled via two separate series: actual_rents and a
+# derived 'non_rent_housing_fuel' (see derive_non_rent_hfp below).  We avoid
+# the pure electricity_gas_fuels index (overstates shock) and the full
+# housing_fuel_power composite (understates, because stable rent dampens it).
+CONCORDANCE = {
+    "share_01_food_non_alcoholic":  "food_non_alcoholic",
+    "share_02_alcohol_tobacco":     "alcohol_tobacco",
+    "share_03_clothing_footwear":   "clothing_footwear",
+    "share_04_actual_rent":         "actual_rents",
+    "share_04_energy_other":        "non_rent_housing_fuel",
+    "share_05_furnishings":         "furnishings",
+    "share_06_health":              "health",
+    "share_07_transport":           "transport",
+    "share_08_communication":       "communication",
+    "share_09_recreation_culture":  "recreation_culture",
+    "share_10_education":           "education",
+    "share_11_restaurants_hotels":  "restaurants_hotels",
     "share_12_misc_goods_services": "misc_goods_services",
 }
 
-ARCHETYPE_COLS: List[str] = [
-    "income_quintile",
-    "tenure_type",
-    "hrp_age_band",
-]
+ARCHETYPE_COLS = ["tenure_type", "income_quintile", "hrp_age_band"]
 
 
-def load_lcf() -> pd.DataFrame:
-    df = pd.read_parquet(PROCESSED / "lcf_expenditure_shares.parquet")
+# Takes monthly CPIH prices and computes annual price changes for each sub-index.
+# Decomposes housing & fuel inflation into its rent and non-rent components using beta_rent as rent's weight.
+def annual_price_changes(prices: pd.DataFrame) -> pd.DataFrame:
+    cols = list(set(CONCORDANCE.values()) | {"housing_fuel_power", "actual_rents"})
+    cols = [c for c in cols if c in prices.columns]
+    annual = prices.groupby("fy_year")[cols].mean().sort_index()
+    pct = (annual.pct_change() * 100).dropna().reset_index().rename(
+        columns={"fy_year": "year"}
+    )
+
+    beta_rent = 0.26
+    pct["non_rent_housing_fuel"] = (
+        pct["housing_fuel_power"] - beta_rent * pct["actual_rents"]
+    ) / (1 - beta_rent)
+
+    return pct
+
+
+def compute_archetype_shares(lcf: pd.DataFrame, arch_col: str) -> pd.DataFrame:
+    """Return weighted mean COICOP share per (archetype, year)."""
     share_cols = list(CONCORDANCE.keys())
-    missing = [c for c in share_cols if c not in df.columns]
+    rows = []
+    for (grp, yr), sub in lcf.groupby([arch_col, "year"]):
+        w = sub["household_weight"].fillna(0)
+        total_weight = w.sum()
+        if total_weight == 0:
+            continue
+        means = {}
+
+        # For each category, compute the weighted mean.
+        for c in share_cols:
+            shares = sub[c].fillna(0)  
+            weighted = shares * w       
+            means[c] = float(weighted.sum() / total_weight)
+        
+        # Each row (archetype, year) has all the categories' weighted means.
+        rows.append({"archetype_value": grp, "year": int(yr), **means})
+    return pd.DataFrame(rows)
+
+# shares is (archetype, year) -> {category: share} for each row.
+# prices is (year) -> {category: price} for each row.
+def laspeyres_inflation(shares: pd.DataFrame, prices: pd.DataFrame, arch_col: str) -> pd.DataFrame:
+    """Apply lagged shares to next-year price changes and sum the contributions to get the group's Laspeyres inflation rate."""
+    rows = []
+    for _, shares_row in shares.iterrows():
+        target_year = shares_row["year"] + 1
+        price_row = prices[prices["year"] == target_year]
+        if price_row.empty:
+            continue
+        price_row = price_row.iloc[0]
+        category_contributions = []
+
+        # LHS of CONCORDANCE is for shares df, RHS is for prices df.
+        for share_col, price_col in CONCORDANCE.items():
+
+            # Inflation contribution is the share of the category * the price change of the category.
+            val = shares_row[share_col] * price_row[price_col]
+            if pd.isna(val):
+                continue
+            category_contributions.append((price_col, val))
+
+        # Category contributions is a list of tuples like ("food_non_alcoholic", 0.1234) so this fancy tuple unpacking sums the values.
+        total = sum(v for _, v in category_contributions)
+        
+        for price_col, val in category_contributions:
+            rows.append({
+                "archetype_name": arch_col,
+                "archetype_value": shares_row["archetype_value"],
+                "year": int(target_year),
+                "coicop_label": price_col,
+                "contribution": val,
+            })
+        
+    return pd.DataFrame(rows)
+
+
+def main() -> None:
+    print("Loading LCF shares and CPIH prices...")
+    lcf = load_lcf_shares()
+    missing = [c for c in CONCORDANCE.keys() if c not in lcf.columns]
     if missing:
         raise ValueError(f"Missing share columns: {missing}")
-    return df
 
+    prices = load_cpih_monthly()
+    price_changes = annual_price_changes(prices)
 
-def load_prices() -> pd.DataFrame:
-    prices = pd.read_parquet(PROCESSED / "cpih_monthly_indices.parquet")
-    prices["date"] = pd.to_datetime(prices["date"])
-    # fy_year is already set by wrangle_mm23.py as April-March financial year.
-    # Do NOT overwrite with date.dt.year (calendar year) — LCF data follows
-    # financial years, so Laspeyres baskets must be paired with FY price changes.
-    return prices
-
-
-def _estimate_rent_weight(monthly_path: pathlib.Path) -> float:
-    """Estimate the weight of actual_rents within housing_fuel_power by
-    regressing monthly index LEVELS (not rates).
-
-    Fitting on levels rather than rates recovers a reliable compositional
-    weight because it exploits the long-run co-movement of the indices
-    rather than short-run rate volatility, which is dominated by energy.
-
-    Returns the implied weight w such that:
-        housing_fuel_power ≈ w * actual_rents + (1-w) * non_rent_component
-    Clamped to [0.15, 0.55] — a range consistent with ONS CPIH methodology
-    (actual rents is roughly 20-30% of COICOP 04 in recent years).
-    """
-    try:
-        m = pd.read_parquet(monthly_path)
-        m = m[["actual_rents", "housing_fuel_power"]].dropna()
-        X = np.column_stack([m["actual_rents"].values, np.ones(len(m))])
-        coeffs, _, _, _ = np.linalg.lstsq(X, m["housing_fuel_power"].values, rcond=None)
-        w = float(np.clip(coeffs[0], 0.15, 0.55))
-    except Exception:
-        w = 0.25  # fallback: ONS-consistent prior
-    return w
-
-
-def _derive_non_rent_hfp(pct: pd.DataFrame) -> pd.DataFrame:
-    """Derive a 'non_rent_housing_fuel' price change series by backing actual
-    rents out of the COICOP 04 composite (housing_fuel_power).
-
-    The weight of actual_rents within housing_fuel_power (β_rents) is
-    estimated from monthly index LEVELS (see _estimate_rent_weight).
-    The non-rent component rate is then:
-
-        non_rent_rate = (housing_fuel_power_rate − β_rents × actual_rents_rate)
-                        / (1 − β_rents)
-
-    This gives a price index for the non-rent, non-OOH portion of COICOP 04
-    (energy + water + maintenance) that is more accurate than either the
-    pure electricity_gas_fuels index (overstatement ~2-3×) or the composite
-    housing_fuel_power (understatement because rent dampens the index).
-    """
-    needed = {"housing_fuel_power", "actual_rents"}
-    if not needed.issubset(pct.columns):
-        pct = pct.copy()
-        pct["non_rent_housing_fuel"] = pct.get("housing_fuel_power", np.nan)
-        return pct
-
-    beta_rents = _estimate_rent_weight(PROCESSED / "cpih_monthly_indices.parquet")
-    pct = pct.copy()
-    pct["non_rent_housing_fuel"] = (
-        (pct["housing_fuel_power"] - beta_rents * pct["actual_rents"])
-        / max(1.0 - beta_rents, 0.15)
-    )
-    print(f"    non_rent_housing_fuel: β_rents={beta_rents:.3f} "
-          f"(level-based OLS over all monthly data)")
-    return pct
-
-
-def annual_price_changes(prices: pd.DataFrame) -> pd.DataFrame:
-    # Collect all sub-indices needed, including the raw series used by _derive_non_rent_hfp
-    raw_cols = list(set(CONCORDANCE.values()) | {
-        "housing_fuel_power", "actual_rents", "electricity_gas_fuels"
-    })
-    available = [c for c in raw_cols if c in prices.columns]
-    annual = prices.groupby("fy_year")[available].mean().sort_index()
-    pct = annual.pct_change() * 100
-    pct.index.name = "year"
-    pct = pct.reset_index().dropna()
-    pct = _derive_non_rent_hfp(pct)
-    return pct
-
-
-def compute_for_archetype(lcf: pd.DataFrame, price_changes: pd.DataFrame, arch_col: str) -> pd.DataFrame:
-    share_cols = list(CONCORDANCE.keys())
-    weight_col = "household_weight" if "household_weight" in lcf.columns else None
-
-    rows = []
-    for (grp, yr), subset in lcf.groupby([arch_col, "year"]):
-        shares = {}
-        denom = subset[weight_col].sum() if weight_col else len(subset)
-        if denom == 0:
-            continue
-        for sc in share_cols:
-            vals = subset[sc].fillna(0)
-            if weight_col:
-                w = subset[weight_col].fillna(0)
-                shares[sc] = float((vals * w).sum() / denom)
-            else:
-                shares[sc] = float(vals.mean())
-        rows.append({"archetype_value": grp, "year": int(yr), **shares})
-
-    shares_df = pd.DataFrame(rows)
-    if shares_df.empty:
-        return pd.DataFrame()
-
-    records = []
-    for _, row in shares_df.iterrows():
-        target_year = row["year"] + 1  # lag shares
-        prices_row = price_changes[price_changes["year"] == target_year]
-        if prices_row.empty:
-            continue
-        price_row = prices_row.iloc[0]
-        contribs = []
-        for sc, pc_col in CONCORDANCE.items():
-            share_val = row.get(sc, 0.0)
-            price_chg = price_row.get(pc_col, np.nan)
-            if pd.isna(price_chg):
-                continue
-            contribs.append((pc_col, share_val * price_chg))
-        total = sum(val for _, val in contribs)
-        for pc_col, val in contribs:
-            records.append(
-                {
-                    "archetype_name": arch_col,
-                    "archetype_value": row["archetype_value"],
-                    "year": int(target_year),
-                    "coicop_label": pc_col,
-                    "contribution": val,
-                }
-            )
-        records.append(
-            {
-                "archetype_name": arch_col,
-                "archetype_value": row["archetype_value"],
-                "year": int(target_year),
-                "coicop_label": "all_items",
-                "contribution": total,
-            }
-        )
-    return pd.DataFrame(records)
-
-
-def build_panel(lcf: pd.DataFrame, price_changes: pd.DataFrame) -> pd.DataFrame:
+    print("\nBuilding decomposition for each archetype...")
     parts = []
     for arch in ARCHETYPE_COLS:
         if arch not in lcf.columns:
             continue
-        part = compute_for_archetype(lcf, price_changes, arch)
-        if not part.empty:
-            parts.append(part)
-    if not parts:
-        return pd.DataFrame()
-    return pd.concat(parts, ignore_index=True)
+        shares = compute_archetype_shares(lcf, arch)
+        part = laspeyres_inflation(shares, price_changes, arch)
+        parts.append(part)
+        print(f"  {arch}: {len(part):,} contribution rows")
 
+    decomp = pd.concat(parts, ignore_index=True)
+    decomp["archetype_value"] = decomp["archetype_value"].astype(str)
 
-def main() -> None:
-    lcf = load_lcf()
-    prices = load_prices()
-    price_changes = annual_price_changes(prices)
-
-    decomposition = build_panel(lcf, price_changes)
-    if decomposition.empty:
-        raise RuntimeError("No decomposition data produced.")
-    decomposition["archetype_value"] = decomposition["archetype_value"].astype(str)
-
-    # Extract inflation rate from the pre-computed "all_items" total row.
-    # Do NOT sum all rows — individual category contributions are also stored
-    # in the decomposition for chart use; summing them together with "all_items"
-    # would double-count every rate.
+    # Extract the per-group headline rate from the pre-computed all_items rows
+    # (do NOT sum component contributions with all_items — double counts).
     infl = (
-        decomposition[decomposition["coicop_label"] == "all_items"]
-        .groupby(["archetype_name", "archetype_value", "year"])["contribution"]
-        .sum()
-        .reset_index()
+        decomp[decomp["coicop_label"] == "all_items"]
+        [["archetype_name", "archetype_value", "year", "contribution"]]
         .rename(columns={"contribution": "inflation_rate"})
     )
-    infl["archetype_value"] = infl["archetype_value"].astype(str)
-
-    decomposition.to_parquet(PROCESSED / "inflation_decomposition.parquet", index=False)
-    infl.to_parquet(PROCESSED / "group_inflation_rates.parquet", index=False)
 
     summary = (
         infl.groupby(["archetype_name", "archetype_value"])["inflation_rate"]
         .agg(mean_inflation="mean", peak_inflation="max")
         .reset_index()
     )
-    summary.to_parquet(PROCESSED / "archetype_inflation_summary.parquet", index=False)
 
-    print(f"Saved: {PROCESSED / 'group_inflation_rates.parquet'}")
-    print(f"Saved: {PROCESSED / 'inflation_decomposition.parquet'}")
-    print(f"Saved: {PROCESSED / 'archetype_inflation_summary.parquet'}")
+    decomp.to_csv(OUTPUT / "inflation_decomposition.csv", index=False)
+    infl.to_csv(OUTPUT / "group_inflation_rates.csv", index=False)
+    summary.to_csv(OUTPUT / "archetype_inflation_summary.csv", index=False)
+
+    print(f"\nSaved: {OUTPUT/'group_inflation_rates.csv'}")
+    print(f"Saved: {OUTPUT/'inflation_decomposition.csv'}")
+    print(f"Saved: {OUTPUT/'archetype_inflation_summary.csv'}")
+    print(f"\n{len(infl):,} inflation rates across {infl['archetype_name'].nunique()} archetypes")
 
 
 if __name__ == "__main__":

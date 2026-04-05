@@ -32,12 +32,18 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 
+from data_loaders import (
+    load_cpih_monthly,
+    load_cpih_fy_indices,
+    load_lcf_shares,
+)
+
 warnings.filterwarnings("ignore")
 
 # ── Paths ─────────────────────────────────────────────────────────────────
 ROOT       = pathlib.Path(__file__).resolve().parents[1]
-PROCESSED  = ROOT / "data" / "processed"
-REPORT     = PROCESSED / "report_figures"
+OUTPUT     = ROOT / "data" / "output"
+REPORT     = OUTPUT / "report_figures"
 SEC3       = REPORT / "sec3_data_preparation"
 SEC4       = REPORT / "sec4_data_exploration"
 
@@ -135,11 +141,10 @@ def _save(fig: plt.Figure, name: str, subdir: pathlib.Path) -> None:
 
 
 def load_data():
-    shares  = pd.read_parquet(PROCESSED / "lcf_expenditure_shares.parquet")
-    monthly = pd.read_parquet(PROCESSED / "cpih_monthly_indices.parquet")
-    monthly["date"] = pd.to_datetime(monthly["date"])
-    fy_idx  = pd.read_parquet(PROCESSED / "cpih_annual_fy_indices.parquet")
-    infl    = pd.read_parquet(PROCESSED / "group_inflation_rates.parquet")
+    shares  = load_lcf_shares()
+    monthly = load_cpih_monthly()
+    fy_idx  = load_cpih_fy_indices()
+    infl    = pd.read_csv(OUTPUT / "group_inflation_rates.csv")
     infl["archetype_value"] = infl["archetype_value"].astype(str)
     return shares, monthly, fy_idx, infl
 
