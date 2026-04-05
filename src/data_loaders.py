@@ -3,18 +3,13 @@ data_loaders.py
 ===============
 Load manually-curated input data straight from Excel and Stata files.
 
-This project uses no intermediate parquet files.  Every downstream script
-calls one of the functions here and gets a ready-to-use DataFrame in the
-same shape that the old parquet files had.
 
-Input files
------------
+Input files:
   data/cleaned/MM23_cleaned.xlsx  – CPIH price indices (manually wrangled)
   data/cleaned/HCI_cleaned.xlsx   – HCI validation data (manually wrangled)
   data/output/lcf_expenditure_shares.csv – computed LCF shares (from wrangle_lcf)
 
-Loader functions
-----------------
+Loader functions:
   load_cpih_monthly()       – monthly CPIH index panel (wide, one row per month)
   load_cpih_fy_indices()    – financial-year average CPIH indices
   load_hci_validation()     – HCI tenure index, long format, 2015+
@@ -38,8 +33,7 @@ OUTPUT = ROOT / "data" / "output"
 MM23_XLSX = CLEANED / "MM23_cleaned.xlsx"
 HCI_XLSX = CLEANED / "HCI_cleaned.xlsx"
 
-# Map the user-friendly Excel column headers to the canonical
-# snake_case names that the downstream analysis code expects.
+# LHS has Excel spreadsheet column names.
 MM23_COLUMN_MAP = {
     "All Items":    "all_items",
     "Food":         "food_non_alcoholic",
@@ -60,42 +54,28 @@ MM23_COLUMN_MAP = {
 
 # HCI tenure short names -> official ONS HCI group names
 HCI_TENURE_MAP = {
-    "Mortgagor":      "Mortgagor and other owner occupier",
+    "Mortgagor": "Mortgagor and other owner occupier",
     "Outright owner": "Outright owner occupier",
     "Private renter": "Private renter",
-    "Social renter":  "Social and other renter",
+    "Social renter": "Social and other renter",
 }
 
 
 def load_cpih_monthly() -> pd.DataFrame:
-    """Monthly CPIH indices in wide format (one row per month).
+    """
+    Monthly CPIH indices in wide format (one row per month).
 
-    Columns returned
-    ----------------
-    date, actual_rents, alcohol_tobacco, all_items, clothing_footwear,
-    communication, education, electricity_gas_fuels, food_non_alcoholic,
-    furnishings, health, housing_fuel_power, misc_goods_services,
-    recreation_culture, restaurants_hotels, transport,
+    Columns returned:
+    date, actual_rents, alcohol_tobacco, all_items, clothing_footwear, communication, education, electricity_gas_fuels, food_non_alcoholic, furnishings, health, housing_fuel_power, misc_goods_services, recreation_culture, restaurants_hotels, transport,
     year, month, fy_year, fy
     """
-    # Row 3 has the description names we use, but we actually want to
-    # read the underlying Excel column by position so that row ordering
-    # is deterministic.  The "Financial Year Averages" sheet already uses
-    # a sensible 1-row header; use that for column naming, and then grab
-    # the price values directly from the Monthly sheet by position.
+    # Read the "Monthly" Excel spreadsheet.
     raw = pd.read_excel(MM23_XLSX, sheet_name="Monthly", header=None)
 
-    # Row 3 of the sheet (0-indexed row 2) is the description row; the
-    # actual data starts at row 4 (0-indexed row 3).
-    # Column positions (0-indexed):
-    #   0 = index date (YYYYMM)
-    #   1 = financial year
-    #   2 = date (datetime string)
-    #   3..17 = the 15 price series
+    # Skip header rows.
     data = raw.iloc[3:].reset_index(drop=True)
 
-    # Map column positions to the canonical names in the same order
-    # as Row 1 of the Financial Year Averages sheet.
+    # Map column positions to the official names (in the same order as Row 1 of the Financial Year Averages sheet).
     price_cols = [
         "all_items",          # col 3
         "food_non_alcoholic",  # col 4
@@ -122,70 +102,58 @@ def load_cpih_monthly() -> pd.DataFrame:
     out["date"] = pd.to_datetime(yyyymm.astype(str), format="%Y%m")
 
     # Copy the 15 price columns (aligning by the same rows we kept)
-    keep_mask = pd.to_numeric(data.iloc[:, 0], errors="coerce").notna()
+    valid_date_rows = pd.to_numeric(data.iloc[:, 0], errors="coerce").notna()
     for i, name in enumerate(price_cols, start=3):
-        out[name] = pd.to_numeric(data.loc[keep_mask, i].values, errors="coerce")
+        out[name] = pd.to_numeric(data.loc[valid_date_rows, i].values, errors="coerce")
 
     # Year / month / financial-year helpers (April–March FY)
+    # fy_year is integer, fy is for human-readability.
     out["year"] = out["date"].dt.year.astype("int32")
     out["month"] = out["date"].dt.month.astype("int32")
-    out["fy_year"] = np.where(
-        out["month"] >= 4, out["year"], out["year"] - 1
-    ).astype("int32")
-    out["fy"] = (
-        out["fy_year"].astype(str)
-        + "/"
-        + (out["fy_year"] + 1).astype(str).str[-2:]
-    )
+    out["fy_year"] = np.where(out["month"] >= 4, out["year"], out["year"] - 1).astype("int32")
+    out["fy"] = (out["fy_year"].astype(str) + "/" + (out["fy_year"] + 1).astype(str).str[-2:])
 
     return out.sort_values("date").reset_index(drop=True)
 
 
 def load_cpih_fy_indices() -> pd.DataFrame:
-    """Financial-year average CPIH indices.
-
-    Returns one row per FY with one column per COICOP division, plus
-    a two-digit FY label ('2015/16' etc.).
+    """
+    Financial-year average CPIH indices.
+    Returns one row per FY with one column per COICOP division, plus a two-digit FY label ('2015/16' etc.).
     """
     df = pd.read_excel(MM23_XLSX, sheet_name="Financial Year Averages")
     df = df.rename(columns={"Financial Year": "year"})
     df = df.rename(columns=MM23_COLUMN_MAP)
     df = df.dropna(subset=["year"]).copy()
     df["year"] = df["year"].astype(int)
-    df["fy"] = (
-        df["year"].astype(str)
-        + "/"
-        + (df["year"] + 1).astype(str).str[-2:]
-    )
-    # Re-order: year, fy, then the 15 price columns
-    cols = ["year", "fy"] + [c for c in df.columns
-                             if c not in ("year", "fy")]
+    df["fy"] = (df["year"].astype(str) + "/" + (df["year"] + 1).astype(str).str[-2:])
+    # Re-order: 1. year, 2. fy, 3. then the 15 price columns
+    cols = ["year", "fy"] + [c for c in df.columns if c not in ("year", "fy")]
     return df[cols].reset_index(drop=True)
 
 
 def load_hci_validation() -> pd.DataFrame:
     """HCI tenure validation data (long format), filtered to 2015+.
-
-    Columns returned
-    ----------------
-    date, group, coicop_code, coicop_name, value, metric, grouping,
-    year, month, fy_year
+    Columns returned:
+    date, group, coicop_code, coicop_name, hci_price_index, metric, grouping, year, month, fy_year
     """
     wide = pd.read_excel(HCI_XLSX, sheet_name="HCI Tenure")
     wide = wide.dropna(subset=["Date"]).copy()
     wide["date"] = pd.to_datetime(wide["Date"], format="%b-%Y", errors="coerce")
     wide = wide.dropna(subset=["date"])
 
+    # Convert HCI from wide to long format.
     long = wide.melt(
         id_vars=["date"],
         value_vars=list(HCI_TENURE_MAP.keys()),
-        var_name="group_short",
-        value_name="value",
+        var_name="raw_tenure_label",
+        value_name="hci_price_index",
     )
-    long["group"] = long["group_short"].map(HCI_TENURE_MAP)
-    long = long.drop(columns=["group_short"])
-    long["value"] = pd.to_numeric(long["value"], errors="coerce")
-    long = long.dropna(subset=["value"])
+
+    long["group"] = long["raw_tenure_label"].map(HCI_TENURE_MAP)
+    long = long.drop(columns=["raw_tenure_label"])
+    long["hci_price_index"] = pd.to_numeric(long["hci_price_index"], errors="coerce")
+    long = long.dropna(subset=["hci_price_index"])
 
     long["coicop_code"] = "0"
     long["coicop_name"] = "All items"
@@ -202,7 +170,7 @@ def load_hci_validation() -> pd.DataFrame:
     ).astype("int32")
 
     return (
-        long[["date", "group", "coicop_code", "coicop_name", "value",
+        long[["date", "group", "coicop_code", "coicop_name", "hci_price_index",
               "metric", "grouping", "year", "month", "fy_year"]]
         .sort_values(["grouping", "group", "date"])
         .reset_index(drop=True)
