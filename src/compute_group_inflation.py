@@ -129,50 +129,49 @@ def laspeyres_inflation(shares: pd.DataFrame, prices: pd.DataFrame, arch_col: st
 
 
 def main() -> None:
-    print("Loading LCF shares and CPIH prices...")
     lcf = load_lcf_shares()
-    missing = [c for c in CONCORDANCE.keys() if c not in lcf.columns]
-    if missing:
-        raise ValueError(f"Missing share columns: {missing}")
+
+    missing_lcf_cols = [c for c in CONCORDANCE.keys() if c not in lcf.columns]
+    if missing_lcf_cols:
+        raise ValueError(f"Missing share columns: {missing_lcf_cols}")
 
     prices = load_cpih_monthly()
     price_changes = annual_price_changes(prices)
 
-    print("\nBuilding decomposition for each archetype...")
-    parts = []
-    for arch in ARCHETYPE_COLS:
-        if arch not in lcf.columns:
+    archetypes_inflation = []
+    for archetype in ARCHETYPE_COLS:
+        if archetype not in lcf.columns:
             continue
-        shares = compute_archetype_shares(lcf, arch)
-        part = laspeyres_inflation(shares, price_changes, arch)
-        parts.append(part)
-        print(f"  {arch}: {len(part):,} contribution rows")
+        shares = compute_archetype_shares(lcf, archetype)
+        archetype_inflation = laspeyres_inflation(shares, price_changes, archetype)
+        archetypes_inflation.append(archetype_inflation)
+        print(f"  {archetype}: {len(archetype_inflation):,} contribution rows")
 
-    decomp = pd.concat(parts, ignore_index=True)
-    decomp["archetype_value"] = decomp["archetype_value"].astype(str)
+    # Save archetypes' inflation to CSV.
+    inflation_decomposition = pd.concat(archetypes_inflation, ignore_index=True)
+    inflation_decomposition["archetype_value"] = inflation_decomposition["archetype_value"].astype(str)
 
-    # Extract the per-group headline rate from the pre-computed all_items rows
-    # (do NOT sum component contributions with all_items — double counts).
-    infl = (
-        decomp[decomp["coicop_label"] == "all_items"]
-        [["archetype_name", "archetype_value", "year", "contribution"]]
-        .rename(columns={"contribution": "inflation_rate"})
+    # Extract the per-group headline rate from the pre-computed all_items rows (do NOT sum component contributions with all_items — double counts).
+    group_inflation_rates = (
+        inflation_decomposition[inflation_decomposition["coicop_label"] == "all_items"]
+        [["archetype_name", "archetype_value", "year", "contribution"]].rename(columns={"contribution": "inflation_rate"})
     )
 
-    summary = (
-        infl.groupby(["archetype_name", "archetype_value"])["inflation_rate"]
+    # Simplify to mean and max for summary statistics.
+    group_inflation_stats = (
+        group_inflation_rates.groupby(["archetype_name", "archetype_value"])["inflation_rate"]
         .agg(mean_inflation="mean", peak_inflation="max")
         .reset_index()
     )
 
-    decomp.to_csv(OUTPUT / "inflation_decomposition.csv", index=False)
-    infl.to_csv(OUTPUT / "group_inflation_rates.csv", index=False)
-    summary.to_csv(OUTPUT / "archetype_inflation_summary.csv", index=False)
+    inflation_decomposition.to_csv(OUTPUT / "inflation_decomposition.csv", index=False)
+    group_inflation_rates.to_csv(OUTPUT / "group_inflation_rates.csv", index=False)
+    group_inflation_stats.to_csv(OUTPUT / "archetype_inflation_summary.csv", index=False)
 
     print(f"\nSaved: {OUTPUT/'group_inflation_rates.csv'}")
     print(f"Saved: {OUTPUT/'inflation_decomposition.csv'}")
     print(f"Saved: {OUTPUT/'archetype_inflation_summary.csv'}")
-    print(f"\n{len(infl):,} inflation rates across {infl['archetype_name'].nunique()} archetypes")
+    print(f"\n{len(group_inflation_rates):,} inflation rates across {group_inflation_rates['archetype_name'].nunique()} archetypes")
 
 
 if __name__ == "__main__":
