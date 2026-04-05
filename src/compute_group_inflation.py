@@ -124,7 +124,16 @@ def laspeyres_inflation(shares: pd.DataFrame, prices: pd.DataFrame, arch_col: st
                 "coicop_label": price_col,
                 "contribution": val,
             })
-        
+
+        # Headline group inflation rate (sum of component contributions).
+        rows.append({
+            "archetype_name": arch_col,
+            "archetype_value": shares_row["archetype_value"],
+            "year": int(target_year),
+            "coicop_label": "all_items",
+            "contribution": total,
+        })
+
     return pd.DataFrame(rows)
 
 
