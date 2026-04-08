@@ -146,12 +146,27 @@ def main() -> None:
 
     prices = load_cpih_monthly()
     price_changes = annual_price_changes(prices)
+    price_changes.to_csv("annual_price_change.csv", index=False)
+
+    hh["inflation_year"] = hh["year"] + 1
+    hh["inflation_proxy"] = 0.0
+
+    for share_col, price_col in CONCORDANCE.items():
+        lookup = price_changes.set_index("year")[price_col]
+        hh["inflation_proxy"] += hh[share_col] * hh["inflation_year"].map(lookup)
+
+    hh = hh.dropna(subset=["inflation_proxy"])
+    hh.to_csv(OUTPUT/"modelling_household_inflation.csv", index=False)
+    print(f"Household proxies: {len(hh):,} rows")
 
     archetypes_inflation = []
+    archetypes_shares = []
     for archetype in ARCHETYPE_COLS:
         if archetype not in lcf.columns:
             continue
         shares = compute_archetype_shares(lcf, archetype)
+        shares["archetype_name"] = archetype
+        archetypes_shares.append(shares)
         archetype_inflation = laspeyres_inflation(shares, price_changes, archetype)
         archetypes_inflation.append(archetype_inflation)
         print(f"  {archetype}: {len(archetype_inflation):,} contribution rows")
@@ -165,6 +180,14 @@ def main() -> None:
         inflation_decomposition[inflation_decomposition["coicop_label"] == "all_items"]
         [["archetype_name", "archetype_value", "year", "contribution"]].rename(columns={"contribution": "inflation_rate"})
     )
+
+    all_shares = pd.concat(archetypes_shares, ignore_index=True)
+    modelling_group = all_shares.merge(
+        group_inflation_rates,
+        on=["archetype_name", 'archetype_value', "year"],
+        how="inner"
+    )
+    modelling_group.to_csv(OUTPUT / "modelling_group_shares.csv", index=False)
 
     # Simplify to mean and max for summary statistics.
     group_inflation_stats = (
