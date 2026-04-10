@@ -2,8 +2,7 @@
 compute_group_inflation.py
 ==========================
 Compute group-specific Laspeyres inflation for each archetype (tenure_type,
-income_quintile, hrp_age_band) using LCF expenditure shares and CPIH sub-
-indices.
+income_quintile) using LCF expenditure shares and CPIH sub-indices.
 
 Reads:
     data/output/household_inflation.csv       (from wrangle_lcf.py)
@@ -49,7 +48,7 @@ CONCORDANCE = {
     "share_12_misc_goods_services": "misc_goods_services",
 }
 
-ARCHETYPE_COLS = ["tenure_type", "income_quintile", "hrp_age_band"]
+ARCHETYPE_COLS = ["tenure_type", "income_quintile"]
 
 
 # Takes monthly CPIH prices and computes annual price changes for each sub-index.
