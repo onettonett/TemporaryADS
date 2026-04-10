@@ -144,9 +144,9 @@ def load_data():
     shares  = load_lcf_shares()
     monthly = load_cpih_monthly()
     fy_idx  = load_cpih_fy_indices()
-    infl    = pd.read_csv(OUTPUT / "group_inflation_rates.csv")
+    infl    = pd.read_csv(OUTPUT / "group_inflation.csv")
     infl["archetype_value"] = infl["archetype_value"].astype(str)
-    decomp  = pd.read_csv(OUTPUT / "inflation_decomposition.csv")
+    decomp  = pd.read_csv(OUTPUT / "group_inflation_breakdown.csv")
     decomp["archetype_value"] = decomp["archetype_value"].astype(str)
     return shares, monthly, fy_idx, infl, decomp
 
@@ -219,7 +219,7 @@ def fig_pipeline_flowchart() -> None:
     int_colour = "#FEF9E7"
     int_edge = "#F39C12"
     draw_box(0.2, 4.0, 2.6, 0.85,
-             "lcf_expenditure_shares\n45,965 \u00d7 98 columns",
+             "household_inflation\n45,965 \u00d7 98 columns",
              int_colour, int_edge, fontsize=7)
     draw_box(3.7, 4.0, 2.6, 0.85,
              "cpih_monthly_indices\n134 months \u00d7 20 cols",
@@ -256,8 +256,8 @@ def fig_pipeline_flowchart() -> None:
     out_colour = "#D6EAF8"
     out_edge = "#2E86C1"
     draw_box(1.0, 0.7, 2.8, 1.2,
-             "group_inflation_rates\n298 rows: archetype \u00d7 year\n"
-             "inflation_decomposition\nCOICOP contributions",
+             "group_inflation\n298 rows: archetype \u00d7 year\n"
+             "group_inflation_breakdown\nCOICOP contributions",
              out_colour, out_edge, fontsize=6.5, bold=False)
     draw_box(4.5, 0.7, 2.8, 1.2,
              "Strand 1: Laspeyres\nTenure-specific inflation\n"
@@ -469,7 +469,7 @@ def fig_outlier_investigation() -> None:
 
     # We need shares computed — reload the processed file for share columns
     # but also need p600t from interim for the negative-expenditure filter.
-    processed = pd.read_parquet(PROCESSED / "lcf_expenditure_shares.parquet")
+    processed = pd.read_parquet(PROCESSED / "household_inflation.parquet")
 
     # The processed file is ALREADY filtered. Reconstruct what was removed
     # by loading interim and computing shares on the fly.

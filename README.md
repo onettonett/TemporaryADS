@@ -50,9 +50,8 @@ python src/generate_report_figures.py
 
 All results land in `data/output/`:
 
-- `lcf_expenditure_shares.csv` — 45,500 household-year rows, 12 COICOP shares, 3 archetypes
-- `group_inflation_rates.csv` — 135 inflation rates (3 archetypes × 9 groups × 5 years)
-- `inflation_decomposition.csv` — contribution by COICOP division
-- `archetype_inflation_summary.csv` — mean + peak inflation per group
+- `household_inflation.csv` — 45,500 household-year rows, 12 COICOP shares, 3 archetypes, personal inflation proxy
+- `group_inflation.csv` — group-level weighted-mean shares + inflation rate
+- `group_inflation_breakdown.csv` — COICOP category contributions to each group's inflation
 - `charts/` — exploratory charts
 - `report_figures/` — publication figures

@@ -35,7 +35,7 @@ The script writes three parquet datasets:
   - `year` (integer, 2015-2023)
   - `person_age`, `person_sex_code` (used only to recover HRP demographics)
 
-- `data/processed/lcf_expenditure_shares.parquet`
+- `data/processed/household_inflation.parquet`
   Household-year rows that start from `lcf_household` and add:
   - `share_*` COICOP division expenditure shares (domain-filtered)
   - Three archetype variables (see below)

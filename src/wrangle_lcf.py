@@ -8,7 +8,7 @@ This is a linear top-to-bottom script: read each year's Stata files, combine,
 clean, compute shares, tag archetypes, save one CSV.
 
 Outputs one file:
-    data/output/lcf_expenditure_shares.csv
+    data/output/household_inflation.csv
 
 Three archetype dimensions are produced:
     tenure_type, income_quintile, hrp_age_band
@@ -251,7 +251,7 @@ for col in ("tenure_type", "income_quintile", "hrp_age_band"):
 internal_cols = COICOP_COLS + ["tenure_code", "rent_weekly"]
 df = df.drop(columns=[c for c in internal_cols if c in df.columns])
 
-out_path = OUTPUT / "lcf_expenditure_shares.csv"
+out_path = OUTPUT / "household_inflation.csv"
 df.to_csv(out_path, index=False)
 print(f"\nSaved: {out_path}")
 print(f"  {len(df):,} households, {df.shape[1]} columns")

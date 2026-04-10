@@ -7,7 +7,7 @@ Load manually-curated input data straight from Excel and Stata files.
 Input files:
   data/cleaned/MM23_cleaned.xlsx  – CPIH price indices (manually wrangled)
   data/cleaned/HCI_cleaned.xlsx   – HCI validation data (manually wrangled)
-  data/output/lcf_expenditure_shares.csv – computed LCF shares (from wrangle_lcf)
+  data/output/lcf_expenditure_shares.csv – household shares (from wrangle_lcf)
 
 Loader functions:
   load_cpih_monthly()       – monthly CPIH index panel (wide, one row per month)
@@ -178,13 +178,13 @@ def load_hci_validation() -> pd.DataFrame:
 
 
 def load_lcf_shares() -> pd.DataFrame:
-    """Household-level LCF expenditure shares, read from the CSV cache
-    produced by wrangle_lcf.py."""
+    """Household-level LCF expenditure shares (and inflation proxy if the
+    pipeline has been run), read from the CSV cache."""
     path = OUTPUT / "lcf_expenditure_shares.csv"
     if not path.exists():
         raise FileNotFoundError(
-            f"LCF shares CSV not found at {path}.\n"
-            "Run `python src/wrangle_lcf.py` first to build it."
+            f"LCF expenditure shares CSV not found at {path}.\n"
+            "Run `python src/run_pipeline.py` first to build it."
         )
     return pd.read_csv(path)
 

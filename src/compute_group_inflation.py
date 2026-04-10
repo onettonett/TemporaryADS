@@ -6,13 +6,13 @@ income_quintile, hrp_age_band) using LCF expenditure shares and CPIH sub-
 indices.
 
 Reads:
-    data/output/lcf_expenditure_shares.csv    (from wrangle_lcf.py)
+    data/output/household_inflation.csv       (from wrangle_lcf.py)
     data/cleaned/MM23_cleaned.xlsx            (via data_loaders.py)
 
 Writes:
-    data/output/group_inflation_rates.csv
-    data/output/inflation_decomposition.csv
-    data/output/archetype_inflation_summary.csv
+    data/output/household_inflation.csv       (adds inflation_proxy column)
+    data/output/group_inflation.csv
+    data/output/group_inflation_breakdown.csv
 """
 
 import pathlib
@@ -146,19 +146,22 @@ def main() -> None:
 
     prices = load_cpih_monthly()
     price_changes = annual_price_changes(prices)
-    price_changes.to_csv("annual_price_change.csv", index=False)
 
-    hh["inflation_year"] = hh["year"] + 1
-    hh["inflation_proxy"] = 0.0
+    # ── 1. household_inflation.csv ──────────────────────────────────────────
+    # Add a personal inflation proxy to every household.
+    lcf["inflation_year"] = lcf["year"] + 1
+    lcf["inflation_proxy"] = 0.0
 
     for share_col, price_col in CONCORDANCE.items():
         lookup = price_changes.set_index("year")[price_col]
-        hh["inflation_proxy"] += hh[share_col] * hh["inflation_year"].map(lookup)
+        lcf["inflation_proxy"] += lcf[share_col] * lcf["inflation_year"].map(lookup)
 
-    hh = hh.dropna(subset=["inflation_proxy"])
-    hh.to_csv(OUTPUT/"modelling_household_inflation.csv", index=False)
-    print(f"Household proxies: {len(hh):,} rows")
+    lcf = lcf.dropna(subset=["inflation_proxy"])
+    lcf.to_csv(OUTPUT / "household_inflation.csv", index=False)
+    print(f"  household_inflation.csv: {len(lcf):,} rows")
 
+    # ── 2. group_inflation.csv ──────────────────────────────────────────────
+    # Group-level weighted-mean shares + headline inflation rate.
     archetypes_inflation = []
     archetypes_shares = []
     for archetype in ARCHETYPE_COLS:
@@ -171,39 +174,30 @@ def main() -> None:
         archetypes_inflation.append(archetype_inflation)
         print(f"  {archetype}: {len(archetype_inflation):,} contribution rows")
 
-    # Save archetypes' inflation to CSV.
-    inflation_decomposition = pd.concat(archetypes_inflation, ignore_index=True)
-    inflation_decomposition["archetype_value"] = inflation_decomposition["archetype_value"].astype(str)
+    # Category-level contributions (used for breakdown file below).
+    breakdown = pd.concat(archetypes_inflation, ignore_index=True)
+    breakdown["archetype_value"] = breakdown["archetype_value"].astype(str)
 
-    # Extract the per-group headline rate from the pre-computed all_items rows (do NOT sum component contributions with all_items — double counts).
-    group_inflation_rates = (
-        inflation_decomposition[inflation_decomposition["coicop_label"] == "all_items"]
-        [["archetype_name", "archetype_value", "year", "contribution"]].rename(columns={"contribution": "inflation_rate"})
+    # Extract the per-group headline rate from the pre-computed all_items rows.
+    group_rates = (
+        breakdown[breakdown["coicop_label"] == "all_items"]
+        [["archetype_name", "archetype_value", "year", "contribution"]]
+        .rename(columns={"contribution": "inflation_rate"})
     )
 
+    # Merge shares + inflation rate into one file.
     all_shares = pd.concat(archetypes_shares, ignore_index=True)
-    modelling_group = all_shares.merge(
-        group_inflation_rates,
-        on=["archetype_name", 'archetype_value', "year"],
+    group_inflation = all_shares.merge(
+        group_rates,
+        on=["archetype_name", "archetype_value", "year"],
         how="inner"
     )
-    modelling_group.to_csv(OUTPUT / "modelling_group_shares.csv", index=False)
+    group_inflation.to_csv(OUTPUT / "group_inflation.csv", index=False)
+    print(f"  group_inflation.csv: {len(group_inflation):,} rows")
 
-    # Simplify to mean and max for summary statistics.
-    group_inflation_stats = (
-        group_inflation_rates.groupby(["archetype_name", "archetype_value"])["inflation_rate"]
-        .agg(mean_inflation="mean", peak_inflation="max")
-        .reset_index()
-    )
-
-    inflation_decomposition.to_csv(OUTPUT / "inflation_decomposition.csv", index=False)
-    group_inflation_rates.to_csv(OUTPUT / "group_inflation_rates.csv", index=False)
-    group_inflation_stats.to_csv(OUTPUT / "archetype_inflation_summary.csv", index=False)
-
-    print(f"\nSaved: {OUTPUT/'group_inflation_rates.csv'}")
-    print(f"Saved: {OUTPUT/'inflation_decomposition.csv'}")
-    print(f"Saved: {OUTPUT/'archetype_inflation_summary.csv'}")
-    print(f"\n{len(group_inflation_rates):,} inflation rates across {group_inflation_rates['archetype_name'].nunique()} archetypes")
+    # ── 3. group_inflation_breakdown.csv ────────────────────────────────────
+    breakdown.to_csv(OUTPUT / "group_inflation_breakdown.csv", index=False)
+    print(f"  group_inflation_breakdown.csv: {len(breakdown):,} rows")
 
 
 if __name__ == "__main__":
